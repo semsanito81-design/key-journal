@@ -4,6 +4,7 @@ node_modules/
 # Секреты и локальные настройки
 .env
 .env.local
+.env.example
 
 # Логи и временные файлы
 *.log

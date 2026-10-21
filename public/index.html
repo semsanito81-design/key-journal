@@ -721,7 +721,7 @@ function closeModal(){ $('#backdrop').classList.remove('open'); editCarrierId=nu
 $('#backdrop').addEventListener('click',e=>{ if(e.target.id==='backdrop') closeModal(); });
 
 /* ============================================================
-   ИМПОРТ EXCEL (SheetJS → POST по одной записи)
+   ИМПОРТ EXCEL (SheetJS → POST /api/carriers/bulk)
    ============================================================ */
 async function importExcel(e){
   const f = e.target.files[0]; if(!f) return;
@@ -731,8 +731,7 @@ async function importExcel(e){
       const wb = XLSX.read(ev.target.result, {type:'array', cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
-      let added=0, errors=0;
-            // Собираем все валидные записи в массив
+
       const payload = [];
       for(const r of rows){
         const employee = String(r['ФИО, должность и подразделение сотрудника']||'').trim();
@@ -757,11 +756,9 @@ async function importExcel(e){
         return;
       }
 
-      // Один запрос вместо N
       const { added } = await API.req('POST','/api/carriers/bulk', payload);
-      toast(`Импортировано: ${added}`,'ok');
+      toast(`Импортировано: ${added} из ${payload.length}`,'ok');
       await loadAndDraw();
-      
     }catch(ex){ toast('Ошибка импорта: '+ex.message,'error'); }
     e.target.value='';
   };
