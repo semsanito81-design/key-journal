@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Журнал ключевых носителей</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f1f5f9;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;
+  --accent:#2563eb;--accent-2:#1d4ed8;--danger:#dc2626;--ok:#16a34a;
+  --warn:#d97706;--sidebar:#0f172a;--sidebar-text:#cbd5e1;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:14px/1.45 system-ui,Segoe UI,Roboto,Arial,sans-serif;
+     background:var(--bg);color:var(--text)}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit}
+.hidden{display:none!important}
+
+/* LOGIN */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#1e3a8a,#0f172a)}
+.login-card{background:#fff;padding:32px;border-radius:16px;width:360px;
+  box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.login-card h1{margin:0 0 4px;font-size:20px}
+.login-card p{margin:0 0 20px;color:var(--muted);font-size:13px}
+.login-card label{display:block;margin-bottom:12px;font-size:12px;color:var(--muted)}
+.login-card input{width:100%;padding:10px 12px;border:1px solid var(--line);
+  border-radius:8px;margin-top:4px}
+.login-err{color:var(--danger);font-size:13px;min-height:18px;margin-bottom:8px}
+
+/* LAYOUT */
+#app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+.sidebar{background:var(--sidebar);color:var(--sidebar-text);padding:16px 0;
+  display:flex;flex-direction:column}
+.brand{padding:0 20px 16px;font-weight:700;color:#fff;font-size:15px;
+  border-bottom:1px solid #1e293b;margin-bottom:10px}
+.nav{display:flex;flex-direction:column;gap:2px;padding:0 10px}
+.nav a{padding:9px 12px;border-radius:8px;color:var(--sidebar-text);
+  text-decoration:none;font-size:13px;display:flex;gap:8px;align-items:center}
+.nav a:hover{background:#1e293b;color:#fff}
+.nav a.active{background:var(--accent);color:#fff}
+.nav-sep{margin:10px 0;border-top:1px solid #1e293b}
+.user-box{margin-top:auto;padding:12px 20px;border-top:1px solid #1e293b;
+  font-size:12px}
+.user-box b{color:#fff;display:block;margin-bottom:2px}
+.user-box .role{color:#94a3b8;text-transform:uppercase;font-size:10px;
+  letter-spacing:.5px}
+.user-box button{margin-top:8px;width:100%;background:#1e293b;color:#fff;
+  border:0;padding:7px;border-radius:6px;font-size:12px}
+.user-box button:hover{background:#334155}
+
+.main{display:flex;flex-direction:column;min-width:0}
+.topbar{background:var(--card);border-bottom:1px solid var(--line);
+  padding:12px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.topbar h2{margin:0;font-size:16px;flex:1 1 auto}
+.content{padding:16px 20px;overflow:auto;flex:1}
+
+/* BUTTONS */
+.btn{border:1px solid var(--line);background:#fff;color:var(--text);
+  padding:7px 12px;border-radius:8px;font-size:13px;display:inline-flex;
+  gap:6px;align-items:center;transition:.15s;white-space:nowrap}
+.btn:hover{background:#eef2ff;border-color:#c7d2fe}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.primary:hover{background:var(--accent-2)}
+.btn.danger{color:var(--danger);border-color:#fecaca}
+.btn.danger:hover{background:#fef2f2}
+.btn.sm{padding:4px 8px;font-size:12px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* TABLE */
+.table-wrap{background:var(--card);border-radius:12px;overflow:auto;
+  border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;
+  white-space:nowrap}
+th{background:#f8fafc;font-weight:600;font-size:12px;color:var(--muted);
+  position:sticky;top:0;cursor:pointer;user-select:none}
+th:hover{background:#eef2ff}
+th.sorted::after{content:" ▲";font-size:10px}
+th.sorted.desc::after{content:" ▼"}
+tr:hover td{background:#fafbff}
+td.num{font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;
+  font-size:11px;font-weight:600}
+.badge.active{background:#dcfce7;color:#166534}
+.badge.returned{background:#e0e7ff;color:#3730a3}
+.badge.expired{background:#fee2e2;color:#991b1b}
+.badge.reserved{background:#fef3c7;color:#92400e}
+.exp-red{color:var(--danger);font-weight:600}
+.exp-warn{color:var(--warn);font-weight:600}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+
+/* TOOLBAR */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.toolbar input,.toolbar select{padding:7px 10px;border:1px solid var(--line);
+  border-radius:8px;font-size:13px;min-width:140px}
+.toolbar .spacer{flex:1}
+
+/* CARDS */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px}
+.card .label{font-size:12px;color:var(--muted)}
+.card .value{font-size:26px;font-weight:700;margin-top:4px}
+.card.warn .value{color:var(--warn)}
+.card.danger .value{color:var(--danger)}
+.card.ok .value{color:var(--ok)}
+
+/* MODAL */
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);
+  display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.backdrop.open{display:flex}
+.modal{background:#fff;border-radius:14px;width:min(820px,100%);
+  max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);
+  display:flex;flex-direction:column}
+.modal h2{margin:0;padding:16px 20px;border-bottom:1px solid var(--line);
+  font-size:16px}
+.form{padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;
+  color:var(--muted)}
+.form label.full{grid-column:1/-1}
+.form label.check{flex-direction:row;align-items:center;gap:8px;
+  font-size:13px;color:var(--text)}
+.form input,.form select,.form textarea{padding:8px 10px;border:1px solid var(--line);
+  border-radius:8px}
+.form input:focus,.form select:focus{outline:2px solid #bfdbfe;
+  border-color:var(--accent)}
+.modal footer{padding:14px 20px;border-top:1px solid var(--line);
+  display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;
+  background:#fff}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:#111827;color:#fff;
+  padding:10px 16px;border-radius:10px;opacity:0;transform:translateY(10px);
+  transition:.25s;z-index:100;font-size:13px;max-width:340px}
+.toast.show{opacity:1;transform:none}
+.toast.error{background:var(--danger)}
+.toast.ok{background:var(--ok)}
+
+/* LOG */
+.log-item{padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px;
+  display:grid;grid-template-columns:170px 140px 1fr;gap:10px}
+.log-item .time{color:var(--muted);font-size:12px}
+.log-item .who{font-weight:600}
+.log-item .what{color:var(--text)}
+.log-item details{margin-top:4px;grid-column:1/-1;font-size:12px;
+  color:var(--muted)}
+.log-item pre{background:#f8fafc;padding:6px;border-radius:6px;
+  overflow:auto;font-size:11px;margin:4px 0 0}
+
+/* PRINT */
+@media print{
+  body{background:#fff}
+  #app,.topbar,.toolbar,.sidebar,.backdrop,.toast{display:none!important}
+  #printArea{display:block!important;padding:0}
+  .act{font-family:Georgia,serif;color:#000}
+  .act h1{font-size:18px;text-align:center;margin:0 0 16px}
+  .act table{width:100%;border-collapse:collapse;font-size:13px}
+  .act td,.act th{border:1px solid #000;padding:8px;white-space:normal}
+  .act .sign{margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px}
+  .act .sign div{border-top:1px solid #000;padding-top:6px;text-align:center}
+}
+#printArea{display:none}
+
+@media(max-width:900px){
+  #app{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:-230px;top:0;bottom:0;width:230px;z-index:60;
+    transition:left .2s}
+  .sidebar.open{left:0}
+  .form{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <form class="login-card" id="loginForm">
+    <h1>🔑 Журнал ключевых носителей</h1>
+    <p>Вход в систему</p>
+    <div class="login-err" id="loginErr"></div>
+    <label>Логин<input id="li_login" required autocomplete="username" value="admin"></label>
+    <label>Пароль<input id="li_pass" type="password" required autocomplete="current-password" value="admin123"></label>
+    <button class="btn primary" style="width:100%;justify-content:center;padding:10px"
+      type="submit">Войти</button>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">🔑 Журнал носителей</div>
+    <nav class="nav">
+      <a href="#journal" data-view="journal">📋 Журнал</a>
+      <a href="#dashboard" data-view="dashboard">📊 Дашборд</a>
+      <a href="#users" data-view="users" data-role="admin">👥 Пользователи</a>
+      <a href="#audit" data-view="audit" data-role="admin,auditor">📜 Аудит-лог</a>
+      <div class="nav-sep"></div>
+      <a href="#profile" data-view="profile">👤 Профиль</a>
+    </nav>
+    <div class="user-box">
+      <b id="ub_name">—</b>
+      <span class="role" id="ub_role">—</span>
+      <button id="btnLogout">Выйти</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="btn sm" id="btnMenu" style="display:none">☰</button>
+      <h2 id="viewTitle">Журнал</h2>
+      <span id="topbarActions"></span>
+    </div>
+    <div class="content" id="content"></div>
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="backdrop" id="backdrop">
+  <div class="modal">
+    <h2 id="modalTitle"></h2>
+    <div id="modalBody"></div>
+    <footer id="modalFooter"></footer>
+  </div>
+</div>
+
+<div id="printArea"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   API-КЛИЕНТ
+   ============================================================ */
+const API = {
+  async req(method,url,body){
+    const r = await fetch(url,{
+      method,
+      headers: body ? {'Content-Type':'application/json'} : {},
+      credentials:'include',
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if(r.status===401){
+      // сессия истекла — показать логин
+      session = null;
+      showLogin();
+      throw new Error('Не авторизован');
+    }
+    if(!r.ok){
+      let err = r.statusText;
+      try{ err = (await r.json()).error || err; }catch{}
+      throw new Error(err);
+    }
+    if(r.status===204) return null;
+    return r.json();
+  },
+  login:(login,password)=>API.req('POST','/api/auth/login',{login,password}),
+  logout:()=>API.req('POST','/api/auth/logout'),
+  me:()=>API.req('GET','/api/auth/me'),
+  changePassword:(oldPassword,newPassword)=>
+    API.req('POST','/api/auth/change-password',{oldPassword,newPassword}),
+
+  carriers:(f={})=>API.req('GET','/api/carriers?'+new URLSearchParams(
+    Object.fromEntries(Object.entries(f).filter(([,v])=>v!=null && v!=='')))),
+  addCarrier:c=>API.req('POST','/api/carriers',c),
+  updCarrier:(id,c)=>API.req('PATCH','/api/carriers/'+id,c),
+  delCarrier:id=>API.req('DELETE','/api/carriers/'+id),
+
+  users:()=>API.req('GET','/api/users'),
+  addUser:u=>API.req('POST','/api/users',u),
+  updUser:(id,u)=>API.req('PATCH','/api/users/'+id,u),
+  delUser:id=>API.req('DELETE','/api/users/'+id),
+
+  audit:(limit=500)=>API.req('GET','/api/audit?limit='+limit),
+};
+
+/* ============================================================
+   УТИЛИТЫ
+   ============================================================ */
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DAY = 86400000;
+const fmtDate = s => { if(!s) return '—'; const d=new Date(s);
+  return isNaN(d)?esc(s):d.toLocaleDateString('ru-RU'); };
+const todayISO = ()=> new Date().toISOString().slice(0,10);
+const newId = ()=> 'tmp_'+Math.random().toString(36).slice(2);
+
+let toastTimer;
+function toast(msg,type=''){
+  const t=$('#toast');
+  t.textContent=msg; t.className='toast show '+type;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+/* ============================================================
+   РАСЧЁТЫ (совпадают с backend-логикой отображения)
+   ============================================================ */
+function endDate(startStr){
+  if(!startStr) return '';
+  const d = new Date(startStr);
+  if(isNaN(d)) return '';
+  d.setFullYear(d.getFullYear()+2);
+  return d.toISOString().slice(0,10);
+}
+function daysLeft(endStr){
+  if(!endStr) return null;
+  return Math.ceil((new Date(endStr) - new Date()) / DAY);
+}
+function formatPeriod(startStr,endStr){
+  if(!startStr||!endStr) return '—';
+  const s=new Date(startStr), e=new Date(endStr);
+  let y=e.getFullYear()-s.getFullYear();
+  let m=e.getMonth()-s.getMonth();
+  let d=e.getDate()-s.getDate();
+  if(d<0){ m--; d += new Date(e.getFullYear(),e.getMonth(),0).getDate(); }
+  if(m<0){ y--; m+=12; }
+  return `${y}г. ${m} мес. ${d} дн.`;
+}
+function statusOf(row){
+  if(row.status==='returned') return 'returned';
+  if(row.status==='reserved') return 'reserved';
+  const dl = daysLeft(endDate(row.cert_start || row.certStart));
+  if(dl!==null && dl<0) return 'expired';
+  return 'active';
+}
+function statusBadge(st){
+  return {
+    active:'<span class="badge active">Активен</span>',
+    returned:'<span class="badge returned">Возвращён</span>',
+    expired:'<span class="badge expired">Истёк</span>',
+    reserved:'<span class="badge reserved">Резерв</span>'
+  }[st]||'';
+}
+function normCarrier(r){
+  // API возвращает snake_case — приводим к camelCase для UI
+  return {
+    id: r.id, ppp: r.ppp,
+    issueDate: r.issue_date ? r.issue_date.slice(0,10) : '',
+    carrierType: r.carrier_type,
+    carrierSerial: r.carrier_serial,
+    employee: r.employee,
+    position: r.position,
+    department: r.department,
+    certType: r.cert_type,
+    certStart: r.cert_start ? r.cert_start.slice(0,10) : '',
+    certSerial: r.cert_serial,
+    returnMark: r.return_mark ? r.return_mark.slice(0,10) : '',
+    status: r.status,
+    signCert: r.sign_cert,
+    signCarrier: r.sign_carrier,
+    twoFactor: r.two_factor,
+  };
+}
+function normUser(u){
+  return { id:u.id, login:u.login, fullName:u.full_name, role:u.role,
+           active:u.active, created:u.created, lastLogin:u.last_login };
+}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+let session = null;
+
+async function tryAutoLogin(){
+  try{
+    const u = await API.me();
+    session = { id:u.id, login:u.login, role:u.role, fullName:u.fullName };
+    return true;
+  }catch{ return false; }
+}
+
+function showLogin(){
+  $('#loginScreen').classList.remove('hidden');
+  $('#app').classList.add('hidden');
+}
+function showApp(){
+  $('#loginScreen').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+}
+
+$('#loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const err=$('#loginErr'); err.textContent='';
+  try{
+    const { user } = await API.login($('#li_login').value.trim(), $('#li_pass').value);
+    session = { id:user.id, login:user.login, role:user.role, fullName:user.fullName };
+    showApp(); bootApp();
+  }catch(ex){ err.textContent = ex.message; }
+});
+
+async function logout(){
+  try{ await API.logout(); }catch{}
+  session = null; showLogin();
+}
+$('#btnLogout').onclick = logout;
+
+function can(roles){ return session && roles.split(',').includes(session.role); }
+
+/* ============================================================
+   APP SHELL
+   ============================================================ */
+let currentView = 'journal';
+let page = 1, pageSize = 25;
+let sortKey = 'ppp', sortDesc = false;
+let filters = { q:'', status:'', carrier:'' };
+let journalData = []; // кэш последнего ответа API для сортировки/пагинации
+
+function bootApp(){
+  $('#ub_name').textContent = session.fullName;
+  $('#ub_role').textContent = session.role;
+  $$('.nav a[data-role]').forEach(a=>{
+    a.classList.toggle('hidden', !can(a.dataset.role));
+  });
+  if(window.innerWidth<=900) $('#btnMenu').style.display='inline-flex';
+  window.removeEventListener('hashchange', route);
+  window.addEventListener('hashchange', route);
+  route();
+}
+
+$('#btnMenu').onclick = ()=> $('#sidebar').classList.toggle('open');
+
+async function route(){
+  const h = location.hash.replace('#','') || 'journal';
+  const allowed = {
+    journal:()=>true, dashboard:()=>true, profile:()=>true,
+    users:()=>can('admin'), audit:()=>can('admin,auditor')
+  };
+  if(!allowed[h] || !allowed[h]()){ location.hash='journal'; return; }
+  currentView = h;
+  $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===h));
+  const titles = {journal:'Журнал',dashboard:'Дашборд',users:'Пользователи',
+                  audit:'Аудит-лог',profile:'Профиль'};
+  $('#viewTitle').textContent = titles[h]||'';
+  await renderTopbarActions();
+  try{
+    if(h==='journal')   await renderJournal();
+    if(h==='dashboard') await renderDashboard();
+    if(h==='users')     await renderUsers();
+    if(h==='audit')     await renderAudit();
+    if(h==='profile')   await renderProfile();
+  }catch(ex){
+    if(ex.message!=='Не авторизован') toast(ex.message,'error');
+  }
+}
+
+async function renderTopbarActions(){
+  const box = $('#topbarActions'); box.innerHTML='';
+  if(currentView==='journal' && can('admin,operator')){
+    box.innerHTML = `<button class="btn primary" id="tbAdd">➕ Добавить</button>
+      <label class="btn" style="cursor:pointer">📥 Импорт Excel
+        <input type="file" id="tbImport" accept=".xlsx,.xls" hidden></label>
+      <button class="btn" id="tbExport">⬇️ Экспорт CSV</button>
+      <button class="btn" id="tbPrint">🖨 Печать списка</button>`;
+    $('#tbAdd').onclick = ()=>openCarrierModal(null);
+    $('#tbImport').onchange = importExcel;
+    $('#tbExport').onclick = exportCsv;
+    $('#tbPrint').onclick = printJournal;
+  }
+  if(currentView==='users' && can('admin')){
+    box.innerHTML = `<button class="btn primary" id="tbAddUser">➕ Пользователь</button>`;
+    $('#tbAddUser').onclick = ()=>openUserModal(null);
+  }
+}
+
+/* ============================================================
+   ЖУРНАЛ
+   ============================================================ */
+async function renderJournal(){
+  const html = `
+    <div class="toolbar">
+      <input id="fl_q" placeholder="Поиск: ФИО, номер, подразделение…" value="${esc(filters.q)}">
+      <select id="fl_status">
+        <option value="">Все статусы</option>
+        ${['active','returned','expired','reserved'].map(s=>
+          `<option value="${s}" ${filters.status===s?'selected':''}>${
+            {active:'Активен',returned:'Возвращён',expired:'Истёк',reserved:'Резерв'}[s]
+          }</option>`).join('')}
+      </select>
+      <select id="fl_carrier"><option value="">Все носители</option></select>
+      <span class="spacer"></span>
+      <span id="fl_stat" style="color:var(--muted)"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            ${head('ppp','№')}${head('issueDate','Дата выдачи')}
+            ${head('carrierType','Носитель')}${head('carrierSerial','Серия/номер')}
+            ${head('employee','ФИО')}${head('position','Должность')}
+            ${head('department','Подразделение')}${head('certType','Серт.')}
+            ${head('certStart','Начало')}${head('__end','Окончание')}
+            ${head('__period','Срок')}${head('daysLeft','Осталось')}
+            ${head('returnMark','Возврат')}${head('__status','Статус')}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="toolbar" style="margin-top:12px" id="pager"></div>
+  `;
+  $('#content').innerHTML = html;
+
+  // обработчики фильтров
+  $('#fl_q').oninput = debounce(async e=>{
+    filters.q = e.target.value; page = 1; await loadAndDraw();
+  }, 300);
+  $('#fl_status').onchange = async e=>{
+    filters.status = e.target.value; page = 1; await loadAndDraw();
+  };
+  $('#fl_carrier').onchange = async e=>{
+    filters.carrier = e.target.value; page = 1; await loadAndDraw();
+  };
+  $$('th[data-key]').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.key;
+    if(sortKey===k) sortDesc=!sortDesc; else {sortKey=k; sortDesc=false;}
+    drawJournalTable();
+  });
+
+  await loadAndDraw();
+}
+
+async function loadAndDraw(){
+  try{
+    const raw = await API.carriers(filters);
+    journalData = raw.map(normCarrier);
+    // заполнить фильтр носителей (из полученных + сохранённые в текущем наборе)
+    const carriers = [...new Set(journalData.map(r=>r.carrierType).filter(Boolean))];
+    const sel = $('#fl_carrier');
+    if(sel){
+      const cur = filters.carrier;
+      sel.innerHTML = '<option value="">Все носители</option>'+carriers.map(c=>
+        `<option ${cur===c?'selected':''}>${esc(c)}</option>`).join('');
+    }
+    drawJournalTable();
+  }catch(ex){ toast(ex.message,'error'); }
+}
+
+function head(key,label){
+  const sorted = sortKey===key;
+  return `<th data-key="${key}" class="${sorted?'sorted'+(sortDesc?' desc':''):''}">${label}</th>`;
+}
+
+function getSorted(){
+  const arr = [...journalData];
+  arr.sort((a,b)=>{
+    let va = sortKey==='daysLeft' ? (daysLeft(endDate(a.certStart)) ?? 1e9) : a[sortKey];
+    let vb = sortKey==='daysLeft' ? (daysLeft(endDate(b.certStart)) ?? 1e9) : b[sortKey];
+    if(va==null) va=''; if(vb==null) vb='';
+    if(typeof va==='number' && typeof vb==='number') return sortDesc?vb-va:va-vb;
+    return sortDesc ? String(vb).localeCompare(String(va),'ru')
+                    : String(va).localeCompare(String(vb),'ru');
+  });
+  return arr;
+}
+
+function drawJournalTable(){
+  const rows = getSorted();
+  const total = rows.length;
+  const pages = Math.max(1,Math.ceil(total/pageSize));
+  if(page>pages) page=pages;
+  const slice = rows.slice((page-1)*pageSize, page*pageSize);
+
+  const tb = $('#tbody');
+  if(!slice.length){
+    tb.innerHTML = `<tr><td colspan="15" class="empty">Пока нет записей</td></tr>`;
+  }else{
+    tb.innerHTML = slice.map(r=>{
+      const end = endDate(r.certStart);
+      const dl = daysLeft(end);
+      const st = statusOf(r);
+      const leftCls = dl===null?'':dl<0?'exp-red':dl<60?'exp-warn':'';
+      const leftTxt = dl===null?'—':dl<0?`просрочен ${-dl} дн.`:`${dl} дн.`;
+      return `<tr>
+        <td class="num">${r.ppp??''}</td>
+        <td class="num">${fmtDate(r.issueDate)}</td>
+        <td>${esc(r.carrierType)}</td>
+        <td class="num">${esc(r.carrierSerial)}</td>
+        <td><b>${esc(r.employee)}</b></td>
+        <td>${esc(r.position)}</td>
+        <td>${esc(r.department)}</td>
+        <td class="num">${r.certType??''}</td>
+        <td class="num">${fmtDate(r.certStart)}</td>
+        <td class="num">${fmtDate(end)}</td>
+        <td class="num">${formatPeriod(r.certStart,end)}</td>
+        <td class="num ${leftCls}">${leftTxt}</td>
+        <td>${r.returnMark?fmtDate(r.returnMark):'—'}</td>
+        <td>${statusBadge(st)}</td>
+        <td>
+          ${can('admin,operator')?`
+            <button class="btn sm" data-act="edit" data-id="${r.id}" title="Ред.">✏️</button>
+            <button class="btn sm" data-act="print" data-id="${r.id}" title="Акт">🖨</button>
+            <button class="btn sm danger" data-act="del" data-id="${r.id}" title="Удалить">🗑</button>
+          `:''}
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  $('#fl_stat').textContent = `Записей: ${total}`;
+  $('#pager').innerHTML = total<=pageSize ? '' : `
+    <button class="btn sm" ${page===1?'disabled':''} id="pgPrev">← Назад</button>
+    <span style="color:var(--muted)">Стр. ${page} из ${pages}</span>
+    <button class="btn sm" ${page===pages?'disabled':''} id="pgNext">Вперёд →</button>
+    <select id="pgSize" style="margin-left:auto">
+      ${[10,25,50,100].map(n=>`<option ${n===pageSize?'selected':''}>${n}</option>`).join('')}
+    </select>`;
+  if($('#pgPrev')) $('#pgPrev').onclick = ()=>{page--; drawJournalTable();};
+  if($('#pgNext')) $('#pgNext').onclick = ()=>{page++; drawJournalTable();};
+  if($('#pgSize')) $('#pgSize').onchange = e=>{pageSize=+e.target.value; page=1; drawJournalTable();};
+
+  tb.onclick = async e=>{
+    const b = e.target.closest('button[data-act]'); if(!b) return;
+    const id = b.dataset.id;
+    if(b.dataset.act==='edit'){
+      const row = journalData.find(x=>x.id===id);
+      openCarrierModal(row);
+    }
+    if(b.dataset.act==='del'){
+      if(!confirm('Удалить запись?')) return;
+      try{
+        await API.delCarrier(id);
+        toast('Удалено','ok');
+        await loadAndDraw();
+      }catch(ex){ toast(ex.message,'error'); }
+    }
+    if(b.dataset.act==='print'){
+      const row = journalData.find(x=>x.id===id);
+      if(row) printAct(row);
+    }
+  };
+}
+
+/* ============================================================
+   МОДАЛКА КАРТОЧКИ
+   ============================================================ */
+let editCarrierId = null;
+function openCarrierModal(row){
+  editCarrierId = row?row.id:null;
+  $('#modalTitle').textContent = row?'Редактирование записи':'Новая запись';
+  const carriers = ['JaCarta PKI','eToken 5110','eTokenPRO Java',
+    'eToken Pro 64k Card 4.2b','IDCore30B eToken 1.7.7','смарт-карта'];
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label>Дата выдачи<input type="date" id="m_issueDate" value="${row?.issueDate||todayISO()}"></label>
+      <label>Вид носителя
+        <select id="m_carrierType">${carriers.map(c=>
+          `<option ${row?.carrierType===c?'selected':''}>${c}</option>`).join('')}</select>
+      </label>
+      <label>Номер / серия<input id="m_carrierSerial" value="${esc(row?.carrierSerial)}"></label>
+      <label>ФИО сотрудника<input id="m_employee" required value="${esc(row?.employee)}"></label>
+      <label>Должность<input id="m_position" value="${esc(row?.position)}"></label>
+      <label>Подразделение<input id="m_department" value="${esc(row?.department)}"></label>
+      <label>Вид сертификата
+        <select id="m_certType">
+          <option value="1" ${row?.certType==1?'selected':''}>1 — аутентификация</option>
+          <option value="2" ${row?.certType==2?'selected':''}>2 — подпись</option>
+          <option value="3" ${row?.certType==3?'selected':''}>3 — шифрование</option>
+        </select>
+      </label>
+      <label>Начало действия<input type="date" id="m_certStart" value="${row?.certStart||todayISO()}"></label>
+      <label>Серийный номер сертификата<input id="m_certSerial" value="${esc(row?.certSerial)}"></label>
+      <label>Отметка о возврате<input type="date" id="m_returnMark" value="${row?.returnMark||''}"></label>
+      <label>Статус
+        <select id="m_status">
+          ${['active','returned','reserved'].map(s=>
+            `<option value="${s}" ${row?.status===s?'selected':''}>${
+              {active:'Активен',returned:'Возвращён',reserved:'Резерв'}[s]
+            }</option>`).join('')}
+        </select>
+      </label>
+      <label class="full">Роспись (сертификат)<input id="m_signCert" value="${esc(row?.signCert)}"></label>
+      <label class="full">Роспись (носитель)<input id="m_signCarrier" value="${esc(row?.signCarrier)}"></label>
+      <label class="check full">
+        <input type="checkbox" id="m_twoFactor" ${row?.twoFactor?'checked':''}>
+        Двухфакторная аутентификация
+      </label>
+    </div>`;
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="mCancel">Отмена</button>
+    <button class="btn primary" id="mSave">Сохранить</button>`;
+  $('#mCancel').onclick = closeModal;
+  $('#mSave').onclick = saveCarrier;
+  $('#backdrop').classList.add('open');
+}
+
+async function saveCarrier(){
+  const rec = {
+    issueDate:    $('#m_issueDate').value || null,
+    carrierType:  $('#m_carrierType').value,
+    carrierSerial:$('#m_carrierSerial').value.trim(),
+    employee:     $('#m_employee').value.trim(),
+    position:     $('#m_position').value.trim(),
+    department:   $('#m_department').value.trim(),
+    certType:     +$('#m_certType').value,
+    certStart:    $('#m_certStart').value || null,
+    certSerial:   $('#m_certSerial').value.trim(),
+    returnMark:   $('#m_returnMark').value || null,
+    status:       $('#m_status').value,
+    signCert:     $('#m_signCert').value.trim(),
+    signCarrier:  $('#m_signCarrier').value.trim(),
+    twoFactor:    $('#m_twoFactor').checked,
+  };
+  if(!rec.employee){ toast('Укажите ФИО','error'); return; }
+  try{
+    if(editCarrierId){
+      await API.updCarrier(editCarrierId, rec);
+    }else{
+      await API.addCarrier(rec);
+    }
+    closeModal(); toast('Сохранено','ok');
+    await loadAndDraw();
+  }catch(ex){ toast(ex.message,'error'); }
+}
+
+function closeModal(){ $('#backdrop').classList.remove('open'); editCarrierId=null; }
+$('#backdrop').addEventListener('click',e=>{ if(e.target.id==='backdrop') closeModal(); });
+
+/* ============================================================
+   ИМПОРТ EXCEL (SheetJS → POST по одной записи)
+   ============================================================ */
+async function importExcel(e){
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = async ev=>{
+    try{
+      const wb = XLSX.read(ev.target.result, {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+      let added=0, errors=0;
+            // Собираем все валидные записи в массив
+      const payload = [];
+      for(const r of rows){
+        const employee = String(r['ФИО, должность и подразделение сотрудника']||'').trim();
+        if(!employee) continue;
+        const parts = employee.split(',').map(s=>s.trim());
+        payload.push({
+          issueDate:    toISO(r['дата выдачи']),
+          carrierType:  String(r['Вид ключевого носителя']||'').trim(),
+          carrierSerial:String(r['Номер, серия ключевого носителя']||'').trim(),
+          employee:     parts[0]||employee,
+          position:     parts[1]||'',
+          department:   parts[2]||'',
+          certType:     +(r['Вид сертификата *']||1),
+          certStart:    toISO(r['Период действия сертификата']),
+          certSerial:   String(r['Серийный номер сертификата']||'').trim(),
+          status:       r['Отметка о возврате ключевого носителя']?'returned':'active',
+        });
+      }
+
+      if(!payload.length){
+        toast('Нет валидных строк для импорта','error');
+        return;
+      }
+
+      // Один запрос вместо N
+      const { added } = await API.req('POST','/api/carriers/bulk', payload);
+      toast(`Импортировано: ${added}`,'ok');
+      await loadAndDraw();
+      
+    }catch(ex){ toast('Ошибка импорта: '+ex.message,'error'); }
+    e.target.value='';
+  };
+  reader.readAsArrayBuffer(f);
+}
+function toISO(v){
+  if(!v) return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(s); return isNaN(d)?null:d.toISOString().slice(0,10);
+}
+
+/* ============================================================
+   ЭКСПОРТ CSV (из уже загруженных journalData)
+   ============================================================ */
+function exportCsv(){
+  const rows = getSorted();
+  const cols = ['ppp','issueDate','carrierType','carrierSerial','employee',
+    'position','department','certType','certStart','certSerial','returnMark',
+    'status','signCert','signCarrier','twoFactor'];
+  const head = cols.join(';');
+  const body = rows.map(r=>cols.map(c=>String(r[c]??'').replace(/;/g,',')).join(';'));
+  const csv = '\uFEFF'+[head,...body].join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `journal_${todayISO()}.csv`; a.click();
+}
+
+/* ============================================================
+   ПЕЧАТЬ
+   ============================================================ */
+function printAct(r){
+  const end = endDate(r.certStart);
+  $('#printArea').innerHTML = `
+    <div class="act">
+      <h1>АКТ приёма-передачи ключевого носителя</h1>
+      <p><b>Дата выдачи:</b> ${fmtDate(r.issueDate)}</p>
+      <table>
+        <tr><th>ФИО</th><td>${esc(r.employee)}</td></tr>
+        <tr><th>Должность</th><td>${esc(r.position)}</td></tr>
+        <tr><th>Подразделение</th><td>${esc(r.department)}</td></tr>
+        <tr><th>Вид носителя</th><td>${esc(r.carrierType)}</td></tr>
+        <tr><th>Серия/номер</th><td>${esc(r.carrierSerial)}</td></tr>
+        <tr><th>Вид сертификата</th><td>${r.certType}</td></tr>
+        <tr><th>Серийный номер сертификата</th><td>${esc(r.certSerial)}</td></tr>
+        <tr><th>Период действия</th><td>${fmtDate(r.certStart)} — ${fmtDate(end)}</td></tr>
+      </table>
+      <div class="sign">
+        <div>Выдал: ${esc(session.fullName)}</div>
+        <div>Принял: ${esc(r.employee)}</div>
+      </div>
+    </div>`;
+  window.print();
+}
+function printJournal(){
+  const rows = getSorted();
+  $('#printArea').innerHTML = `
+    <div class="act">
+      <h1>Журнал учёта ключевых носителей</h1>
+      <p>Дата печати: ${new Date().toLocaleString('ru-RU')}</p>
+      <table>
+        <thead><tr><th>№</th><th>Дата</th><th>Носитель</th><th>Серия</th>
+        <th>ФИО</th><th>Подразделение</th><th>Серт.</th><th>До</th><th>Статус</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td>${r.ppp??''}</td><td>${fmtDate(r.issueDate)}</td>
+          <td>${esc(r.carrierType)}</td><td>${esc(r.carrierSerial)}</td>
+          <td>${esc(r.employee)}</td><td>${esc(r.department)}</td>
+          <td>${r.certType??''}</td><td>${fmtDate(endDate(r.certStart))}</td>
+          <td>${statusOf(r)}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  window.print();
+}
+
+/* ============================================================
+   ДАШБОРД (по данным API)
+   ============================================================ */
+async function renderDashboard(){
+  let all;
+  try{ all = (await API.carriers()).map(normCarrier); }
+  catch(ex){ toast(ex.message,'error'); return; }
+  const stats = {total:all.length,active:0,expired:0,soon30:0,soon60:0,soon90:0};
+  all.forEach(r=>{
+    const st = statusOf(r);
+    if(st==='active') stats.active++;
+    if(st==='expired') stats.expired++;
+    const dl = daysLeft(endDate(r.certStart));
+    if(dl!==null && dl>=0){
+      if(dl<=30) stats.soon30++;
+      if(dl<=60) stats.soon60++;
+      if(dl<=90) stats.soon90++;
+    }
+  });
+  const byCarrier = {};
+  all.forEach(r=>{ byCarrier[r.carrierType||'—'] = (byCarrier[r.carrierType||'—']||0)+1; });
+  const expiring = all.filter(r=>{
+    const dl = daysLeft(endDate(r.certStart));
+    return dl!==null && dl>=0 && dl<=90;
+  }).sort((a,b)=> daysLeft(endDate(a.certStart))-daysLeft(endDate(b.certStart)));
+
+  $('#content').innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="label">Всего записей</div><div class="value">${stats.total}</div></div>
+      <div class="card ok"><div class="label">Активных</div><div class="value">${stats.active}</div></div>
+      <div class="card danger"><div class="label">Просрочено</div><div class="value">${stats.expired}</div></div>
+      <div class="card warn"><div class="label">Истекает ≤30 дн.</div><div class="value">${stats.soon30}</div></div>
+      <div class="card warn"><div class="label">≤60 дн.</div><div class="value">${stats.soon60}</div></div>
+      <div class="card warn"><div class="label">≤90 дн.</div><div class="value">${stats.soon90}</div></div>
+    </div>
+    <h3 style="margin:16px 0 8px">По типам носителей</h3>
+    <div class="cards">
+      ${Object.entries(byCarrier).map(([k,v])=>
+        `<div class="card"><div class="label">${esc(k)}</div><div class="value">${v}</div></div>`).join('')}
+    </div>
+    <h3 style="margin:16px 0 8px">Истекают в ближайшие 90 дней (${expiring.length})</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>№</th><th>ФИО</th><th>Носитель</th><th>Окончание</th><th>Осталось</th><th>Статус</th></tr></thead>
+      <tbody>${expiring.slice(0,50).map(r=>{
+        const dl = daysLeft(endDate(r.certStart));
+        return `<tr>
+          <td>${r.ppp??''}</td><td>${esc(r.employee)}</td>
+          <td>${esc(r.carrierType)}</td><td>${fmtDate(endDate(r.certStart))}</td>
+          <td class="${dl<60?'exp-warn':''}">${dl} дн.</td>
+          <td>${statusBadge(statusOf(r))}</td></tr>`;
+      }).join('') || `<tr><td colspan="6" class="empty">Нет</td></tr>`}</tbody>
+    </table></div>`;
+}
+
+/* ============================================================
+   ПОЛЬЗОВАТЕЛИ (admin)
+   ============================================================ */
+async function renderUsers(){
+  let users;
+  try{ users = (await API.users()).map(normUser); }
+  catch(ex){ toast(ex.message,'error'); return; }
+  $('#content').innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Логин</th><th>ФИО</th><th>Роль</th><th>Активен</th>
+      <th>Создан</th><th>Последний вход</th><th></th></tr></thead>
+      <tbody>${users.map(u=>`<tr>
+        <td><b>${esc(u.login)}</b></td>
+        <td>${esc(u.fullName)}</td>
+        <td>${esc(u.role)}</td>
+        <td>${u.active?'✅':'⛔'}</td>
+        <td>${fmtDate(u.created)}</td>
+        <td>${u.lastLogin?new Date(u.lastLogin).toLocaleString('ru-RU'):'—'}</td>
+        <td>
+          <button class="btn sm" data-act="edit" data-id="${u.id}">✏️</button>
+          <button class="btn sm" data-act="reset" data-id="${u.id}">🔑</button>
+          <button class="btn sm" data-act="toggle" data-id="${u.id}"
+            ${u.id===session.id?'disabled':''}>${u.active?'⛔':'✅'}</button>
+          <button class="btn sm danger" data-act="del" data-id="${u.id}"
+            ${u.id===session.id?'disabled':''}>🗑</button>
+        </td></tr>`).join('')}</tbody>
+    </table></div>`;
+
+  $('#content').onclick = async e=>{
+    const b = e.target.closest('button[data-act]'); if(!b) return;
+    const id = b.dataset.id;
+    const u = users.find(x=>x.id===id);
+    if(!u) return;
+    if(b.dataset.act==='edit') openUserModal(u);
+    if(b.dataset.act==='reset'){
+      const np = prompt(`Новый пароль для ${u.login} (≥6 символов):`);
+      if(!np) return;
+      try{
+        await API.updUser(id,{password:np});
+        toast('Пароль сброшен','ok');
+      }catch(ex){ toast(ex.message,'error'); }
+    }
+    if(b.dataset.act==='toggle'){
+      try{
+        await API.updUser(id,{active:!u.active});
+        await renderUsers();
+      }catch(ex){ toast(ex.message,'error'); }
+    }
+    if(b.dataset.act==='del'){
+      if(!confirm(`Удалить пользователя ${u.login}?`)) return;
+      try{
+        await API.delUser(id);
+        await renderUsers(); toast('Удалён','ok');
+      }catch(ex){ toast(ex.message,'error'); }
+    }
+  };
+}
+
+let editUserId = null;
+function openUserModal(u){
+  editUserId = u?u.id:null;
+  $('#modalTitle').textContent = u?'Редактирование пользователя':'Новый пользователь';
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label>Логин<input id="u_login" value="${esc(u?.login)}" ${u?'disabled':''}></label>
+      <label>ФИО<input id="u_fullName" value="${esc(u?.fullName)}"></label>
+      <label>Роль
+        <select id="u_role">
+          ${['admin','operator','auditor'].map(r=>
+            `<option ${u?.role===r?'selected':''}>${r}</option>`).join('')}
+        </select>
+      </label>
+      <label>${u?'Новый пароль (пусто — не менять)':'Пароль'}</label>
+      <input id="u_password" type="password" style="grid-column:1/-1"
+        placeholder="≥6 символов">
+    </div>`;
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="muCancel">Отмена</button>
+    <button class="btn primary" id="muSave">Сохранить</button>`;
+  $('#muCancel').onclick = closeModal;
+  $('#muSave').onclick = async ()=>{
+    try{
+      const login = $('#u_login').value.trim();
+      const fullName = $('#u_fullName').value.trim();
+      const role = $('#u_role').value;
+      const password = $('#u_password').value;
+      if(editUserId){
+        const patch = { fullName, role };
+        if(password) patch.password = password;
+        await API.updUser(editUserId, patch);
+      }else{
+        if(!login) throw new Error('Укажите логин');
+        await API.addUser({ login, fullName, role, password });
+      }
+      closeModal(); await renderUsers(); toast('Сохранено','ok');
+    }catch(ex){ toast(ex.message,'error'); }
+  };
+  $('#backdrop').classList.add('open');
+}
+
+/* ============================================================
+   АУДИТ-ЛОГ
+   ============================================================ */
+async function renderAudit(){
+  let items;
+  try{ items = await API.audit(); }
+  catch(ex){ toast(ex.message,'error'); return; }
+  $('#content').innerHTML = `
+    <div class="table-wrap"><div>
+      ${items.length? items.map(a=>`
+        <div class="log-item">
+          <span class="time">${new Date(a.ts).toLocaleString('ru-RU')}</span>
+          <span class="who">${esc(a.user_name||'—')}</span>
+          <span class="what"><b>${esc(a.action)}</b> · ${esc(a.entity)}
+            ${a.entity_id?`<code style="font-size:11px">${esc(a.entity_id)}</code>`:''}
+            ${a.details?`<details><summary>детали</summary><pre>${esc(JSON.stringify(a.details,null,2))}</pre></details>`:''}
+          </span>
+        </div>`).join('') : '<div class="empty">Пока пусто</div>'}
+    </div></div>`;
+}
+
+/* ============================================================
+   ПРОФИЛЬ
+   ============================================================ */
+async function renderProfile(){
+  const me = session; // уже есть
+  $('#content').innerHTML = `
+    <div class="card" style="max-width:520px">
+      <div class="label">Логин</div><div style="font-size:16px;font-weight:600">${esc(me.login)}</div>
+      <div class="label" style="margin-top:12px">ФИО</div><div>${esc(me.fullName)}</div>
+      <div class="label" style="margin-top:12px">Роль</div><div>${esc(me.role)}</div>
+      <hr style="margin:20px 0;border:0;border-top:1px solid var(--line)">
+      <h3 style="margin:0 0 12px">Смена пароля</h3>
+      <label style="display:block;margin-bottom:8px;font-size:12px;color:var(--muted)">
+        Текущий пароль<input id="p_old" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px">
+      </label>
+      <label style="display:block;margin-bottom:8px;font-size:12px;color:var(--muted)">
+        Новый пароль<input id="p_new" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px">
+      </label>
+      <label style="display:block;margin-bottom:12px;font-size:12px;color:var(--muted)">
+        Повторите новый<input id="p_new2" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px">
+      </label>
+      <button class="btn primary" id="p_save">Изменить пароль</button>
+    </div>`;
+  $('#p_save').onclick = async ()=>{
+    const oldP = $('#p_old').value, np = $('#p_new').value, np2 = $('#p_new2').value;
+    if(np!==np2){ toast('Пароли не совпадают','error'); return; }
+    try{
+      await API.changePassword(oldP, np);
+      toast('Пароль изменён','ok');
+      $('#p_old').value=$('#p_new').value=$('#p_new2').value='';
+    }catch(ex){ toast(ex.message,'error'); }
+  };
+}
+
+/* ============================================================
+   УТИЛИТА debounce
+   ============================================================ */
+function debounce(fn,ms){
+  let t;
+  return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); };
+}
+
+/* ============================================================
+   СТАРТ
+   ============================================================ */
+(async function start(){
+  if(await tryAutoLogin()){
+    showApp(); bootApp();
+  }else{
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>

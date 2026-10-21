@@ -1,0 +1,19 @@
+{
+  "name": "key-journal",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "migrate": "node server/migrations/run.js"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/static": "^10.1.6",
+    "dotenv": "^16.4.0",
+    "fastify": "^5.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.0"
+  }
+}
