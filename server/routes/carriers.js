@@ -7,21 +7,32 @@ export default async function(app){
 
   // --- Список с фильтрами ---
   app.get('/', async (req)=>{
-    const { q: search = '', status = '', carrier = '' } = req.query;
-    const cond = []; const params = [];
-    if(search){
-      params.push(`%${search}%`);
-      cond.push(`(employee ILIKE $${params.length}
-        OR position ILIKE $${params.length}
-        OR department ILIKE $${params.length}
-        OR carrier_serial ILIKE $${params.length})`);
-    }
+    const { q:search='', status='', carrier='', with:withParam='' } = req.query;
+    const cond=[], params=[];
+    if(search){ params.push(`%${search}%`);
+      cond.push(`(employee ILIKE $${params.length} OR position ILIKE $${params.length}
+        OR department ILIKE $${params.length} OR carrier_serial ILIKE $${params.length})`); }
     if(status){ params.push(status); cond.push(`status=$${params.length}`); }
     if(carrier){ params.push(carrier); cond.push(`carrier_type=$${params.length}`); }
-    const where = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
+    const where = cond.length?'WHERE '+cond.join(' AND '):'';
     const { rows } = await q(
       `SELECT * FROM carriers ${where} ORDER BY ppp NULLS LAST, issue_date DESC`,
       params);
+    
+    if(withParam === 'certificates' && rows.length){
+      const ids = rows.map(r=>r.id);
+      const { rows: certs } = await q(`
+        SELECT c.*, t.name AS type_name, t.title AS type_title
+          FROM certificates c
+          JOIN cert_types t ON t.code = c.cert_type
+          WHERE c.carrier_id = ANY($1::uuid[])
+          ORDER BY c.cert_type`, [ids]);
+      const byCarrier = {};
+      certs.forEach(c=>{
+        (byCarrier[c.carrier_id] ||= []).push(c);
+      });
+      rows.forEach(r=>{ r.certificates = byCarrier[r.id] || []; });
+    }
     return rows;
   });
 

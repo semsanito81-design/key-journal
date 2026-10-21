@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import carrierRoutes from './routes/carriers.js';
 import userRoutes from './routes/users.js';
 import auditRoutes from './routes/audit.js';
+import certRoutes from './routes/certificates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +26,7 @@ app.register(authRoutes,  { prefix:'/api/auth' });
 app.register(carrierRoutes,{ prefix:'/api/carriers' });
 app.register(userRoutes,  { prefix:'/api/users' });
 app.register(auditRoutes, { prefix:'/api/audit' });
+app.register(certRoutes, { prefix:'/api/certificates' });
 
 app.setErrorHandler((err,req,reply)=>{
   app.log.error(err);
