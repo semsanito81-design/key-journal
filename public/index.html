@@ -673,22 +673,35 @@ async function handleTableClick(e){
    МОДАЛКА НОСИТЕЛЯ
    ============================================================ */
 let editCarrierId = null;
-let allEmployees = []; // кэш сотрудников
 
 async function openCarrierModal(row){
   editCarrierId = row ? row.id : null;
   $('#modalTitle').textContent = row ? 'Редактирование носителя' : 'Новый носитель';
   const types = ['JaCarta PKI','eToken 5110','eTokenPRO Java','eToken Pro 64k Card 4.2b','IDCore30B eToken 1.7.7','смарт-карта'];
   
-  // Загружаем сотрудников
-  try { allEmployees = await API.employees(); } catch(e){ allEmployees = []; }
+  let allEmployees = [];
+  let existingCarriers = [];
+  
+  try {
+    const [emps, cars] = await Promise.all([API.employees(), API.carriers()]);
+    allEmployees = emps;
+    existingCarriers = cars;
+  } catch(e){ toast('Ошибка загрузки данных','error'); return; }
+
+  // Фильтруем: сотрудники, у которых еще нет носителя
+  // Если мы редактируем носитель, то текущего сотрудника нужно оставить в списке
+  const availableEmployees = allEmployees.filter(emp => {
+    const hasCarrier = existingCarriers.some(car => car.employee === emp.full_name);
+    if (row && row.employee === emp.full_name) return true; // при редактировании оставляем его
+    return !hasCarrier;
+  });
 
   $('#modalBody').innerHTML = `
     <div class="form">
-      <label class="full">Сотрудник (начните вводить ФИО)
-        <input id="m_employee_search" list="emp_list" placeholder="Выберите или введите ФИО..." value="${esc(row?.employee)}" autocomplete="off">
+      <label class="full">Сотрудник (только у кого нет ключа)
+        <input id="m_employee_search" list="emp_list" placeholder="Начните вводить ФИО..." value="${esc(row?.employee)}" autocomplete="off">
         <datalist id="emp_list">
-          ${allEmployees.map(e => `<option value="${esc(e.full_name)}">${esc(e.position||'')} ${esc(e.department||'')}</option>`).join('')}
+          ${availableEmployees.map(e => `<option value="${esc(e.full_name)}">${esc(e.position||'')} ${esc(e.department||'')}</option>`).join('')}
         </datalist>
       </label>
       
@@ -710,7 +723,6 @@ async function openCarrierModal(row){
       <label class="full">Роспись (носитель)<input id="m_signCarrier" value="${esc(row?.signCarrier)}"></label>
     </div>`;
   
-  // При выборе сотрудника из списка автозаполняем должность и подразделение
   $('#m_employee_search').oninput = (e) => {
     const emp = allEmployees.find(x => x.full_name === e.target.value);
     if (emp) {
@@ -1132,7 +1144,11 @@ async function renderEmployees(){
     <div class="toolbar">
       <input id="emp_q" placeholder="Поиск по ФИО...">
       <span class="spacer"></span>
-      <button class="btn primary" id="btnAddEmp">➕ Добавить сотрудника</button>
+      <button class="btn primary" id="btnAddEmp">➕ Добавить</button>
+      <label class="btn" style="cursor:pointer; margin-left:8px;">📥 Импорт CSV
+        <input type="file" id="importEmpFile" accept=".csv" hidden>
+      </label>
+      <button class="btn" id="btnExportEmp">⬇️ Экспорт CSV</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -1161,7 +1177,6 @@ async function renderEmployees(){
     </div>
   `;
 
-  // Поиск по клиенту (простой фильтр)
   $('#emp_q').oninput = (e) => {
     const val = e.target.value.toLowerCase();
     $$('#emp_tbody tr').forEach(tr => {
@@ -1170,6 +1185,55 @@ async function renderEmployees(){
   };
 
   $('#btnAddEmp').onclick = () => openEmployeeModal(null);
+  
+  $('#btnExportEmp').onclick = () => {
+    // ЭКСПОРТ
+    const head = ['ФИО;Должность;Подразделение'];
+    const body = list.map(e => [e.full_name, e.position||'', e.department||''].map(v=>String(v).replace(/;/g,',')).join(';'));
+    const csv = '\uFEFF' + [head, ...body].join('\n');
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `employees_${todayISO()}.csv`;
+    a.click();
+  };
+
+  $('#importEmpFile').onchange = async (e) => {
+    // ИМПОРТ
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try {
+        const text = ev.target.result;
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        const payload = [];
+        
+        // Пропускаем первую строку (заголовки), если она там есть
+        let startIdx = 0;
+        if(lines[0].toLowerCase().includes('фио')) startIdx = 1;
+        
+        for(let i = startIdx; i < lines.length; i++) {
+          const parts = lines[i].split(';');
+          if(parts.length >= 1 && parts[0]) {
+            payload.push({
+              full_name: parts[0].trim(),
+              position: parts[1] ? parts[1].trim() : '',
+              department: parts[2] ? parts[2].trim() : ''
+            });
+          }
+        }
+        
+        if(!payload.length) throw new Error('Пустой файл или неверный формат');
+        
+        const res = await API.req('POST', '/api/employees/bulk', payload);
+        toast(`Успешно загружено: ${res.added}`, 'ok');
+        await renderEmployees();
+      } catch(ex) { toast('Ошибка импорта: ' + ex.message, 'error'); }
+      e.target.value = '';
+    };
+    reader.readAsText(f, 'UTF-8');
+  };
+
   $('#emp_tbody').onclick = (e) => {
     const btn = e.target.closest('button[data-act]');
     if(!btn) return;
@@ -1182,35 +1246,6 @@ async function renderEmployees(){
       }
     }
   };
-}
-
-let editEmpId = null;
-function openEmployeeModal(emp) {
-  editEmpId = emp ? emp.id : null;
-  $('#modalTitle').textContent = emp ? 'Редактировать сотрудника' : 'Новый сотрудник';
-  $('#modalBody').innerHTML = `
-    <div class="form">
-      <label class="full">ФИО сотрудника<input id="e_name" value="${esc(emp?.full_name)}" required></label>
-      <label>Должность<input id="e_pos" value="${esc(emp?.position)}"></label>
-      <label>Подразделение<input id="e_dept" value="${esc(emp?.department)}"></label>
-    </div>`;
-  $('#modalFooter').innerHTML = `<button class="btn" id="eCancel">Отмена</button><button class="btn primary" id="eSave">Сохранить</button>`;
-  
-  $('#eCancel').onclick = closeModal;
-  $('#eSave').onclick = async () => {
-    const rec = {
-      full_name: $('#e_name').value.trim(),
-      position: $('#e_pos').value.trim(),
-      department: $('#e_dept').value.trim()
-    };
-    if(!rec.full_name) { toast('Укажите ФИО', 'error'); return; }
-    try {
-      if(editEmpId) await API.updEmployee(editEmpId, rec);
-      else await API.addEmployee(rec);
-      closeModal(); renderEmployees(); toast('Сохранено', 'ok');
-    } catch(ex) { toast(ex.message, 'error'); }
-  };
-  $('#backdrop').classList.add('open');
 }
 
 (async function start(){
