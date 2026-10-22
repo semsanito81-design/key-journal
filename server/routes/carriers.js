@@ -103,12 +103,12 @@ export default async function(app){
         issue_date=$1, carrier_type=$2, carrier_serial=$3, employee=$4,
         position=$5, department=$6, cert_type=$7, cert_start=$8, cert_serial=$9,
         return_mark=$10, status=$11, sign_cert=$12, sign_carrier=$13,
-        two_factor=$14, updated=now()
+        two_factor=$14, signature_data=$16, updated=now()
       WHERE id=$15 RETURNING *`,
-      [b.issueDate||null, b.carrierType, b.carrierSerial, b.employee, b.position,
-       b.department, b.certType, b.certStart||null, b.certSerial,
-       b.returnMark||null, b.status||'active', b.signCert, b.signCarrier,
-       !!b.twoFactor, req.params.id]);
+      [b.issueDate||null,b.carrierType,b.carrierSerial,b.employee,b.position,
+       b.department,b.certType,b.certStart||null,b.certSerial,b.returnMark||null,
+       b.status||'active',b.signCert,b.signCarrier,!!b.twoFactor,req.params.id,
+       b.signature_data || null]); // <-- НОВОЕ ПОЛЕ
     if(!rows[0]) return reply.code(404).send({ error:'Not found' });
     await q(`INSERT INTO audit(user_id,user_name,action,entity,entity_id,details)
              VALUES($1,$2,'carrier_update','carrier',$3,$4)`,

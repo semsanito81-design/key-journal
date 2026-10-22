@@ -6,6 +6,7 @@
 <title>Журнал ключевых носителей</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <style>
 :root{
   --bg:#f1f5f9;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;
@@ -688,11 +689,9 @@ async function openCarrierModal(row){
     existingCarriers = cars;
   } catch(e){ toast('Ошибка загрузки данных','error'); return; }
 
-  // Фильтруем: сотрудники, у которых еще нет носителя
-  // Если мы редактируем носитель, то текущего сотрудника нужно оставить в списке
   const availableEmployees = allEmployees.filter(emp => {
     const hasCarrier = existingCarriers.some(car => car.employee === emp.full_name);
-    if (row && row.employee === emp.full_name) return true; // при редактировании оставляем его
+    if (row && row.employee === emp.full_name) return true;
     return !hasCarrier;
   });
 
@@ -719,8 +718,22 @@ async function openCarrierModal(row){
         </select>
       </label>
       
+      <label>Отметка о возврате<input type="date" id="m_returnMark" value="${row?.returnMark||''}"></label>
       <label class="full">Роспись (сертификат)<input id="m_signCert" value="${esc(row?.signCert)}"></label>
       <label class="full">Роспись (носитель)<input id="m_signCarrier" value="${esc(row?.signCarrier)}"></label>
+      <label class="check full">
+        <input type="checkbox" id="m_twoFactor" ${row?.twoFactor?'checked':''}>
+        Двухфакторная аутентификация
+      </label>
+
+      <!-- Блок подписи в самом низу -->
+      <div class="full" style="margin-top: 10px;">
+        <label style="display:block; margin-bottom:4px; font-size:12px; color:var(--muted);">Подпись сотрудника (при получении)</label>
+        <div style="border:1px solid #ccc; border-radius:8px; background:#f8fafc; padding:4px;">
+          <canvas id="signature-pad" style="width:100%; height:150px; touch-action:none; background:#fff; cursor:crosshair; border-radius:4px;"></canvas>
+        </div>
+        <button type="button" class="btn sm" id="clear-signature" style="margin-top:8px;">Очистить подпись</button>
+      </div>
     </div>`;
   
   $('#m_employee_search').oninput = (e) => {
@@ -730,6 +743,31 @@ async function openCarrierModal(row){
       $('#m_department').value = emp.department || '';
     }
   };
+  
+  // Инициализация Signature Pad
+  const canvas = document.getElementById('signature-pad');
+  if (canvas) {
+    const signaturePad = new SignaturePad(canvas, {
+      backgroundColor: 'rgba(255, 255, 255, 0)',
+      penColor: 'rgb(0, 0, 0)'
+    });
+
+    if (row && row.signature_data) {
+       // signaturePad.fromDataURL(row.signature_data); // Если нужно подгружать старую
+    }
+
+    document.getElementById('clear-signature').onclick = (e) => {
+      e.preventDefault();
+      signaturePad.clear();
+    };
+
+    window.getSignature = () => {
+      if (signaturePad.isEmpty()) return row?.signature_data || null;
+      return signaturePad.toDataURL('image/png');
+    };
+  } else {
+    window.getSignature = () => null;
+  }
   
   $('#modalFooter').innerHTML = `
     <button class="btn" id="mCancel">Отмена</button>
@@ -741,17 +779,18 @@ async function openCarrierModal(row){
 
 async function saveCarrier(){
   const rec = {
-    issueDate:    $('#m_issueDate').value || null,
-    carrierType:  $('#m_carrierType').value,
-    carrierSerial:$('#m_carrierSerial').value.trim(),
-    employee:     $('#m_employee').value.trim(),
-    position:     $('#m_position').value.trim(),
-    department:   $('#m_department').value.trim(),
-    status:       $('#m_status').value,
-    returnMark:   $('#m_returnMark').value || null,
-    signCert:     $('#m_signCert').value.trim(),
-    signCarrier:  $('#m_signCarrier').value.trim(),
-    twoFactor:    $('#m_twoFactor').checked,
+    issueDate:    $('#m_issueDate')?.value || null,
+    carrierType:  $('#m_carrierType')?.value,
+    carrierSerial:$('#m_carrierSerial')?.value.trim(),
+    employee:     $('#m_employee_search')?.value.trim() || $('#m_employee')?.value.trim(),
+    position:     $('#m_position')?.value.trim(),
+    department:   $('#m_department')?.value.trim(),
+    status:       $('#m_status')?.value,
+    returnMark:   $('#m_returnMark')?.value || null,
+    signCert:     $('#m_signCert')?.value.trim(),
+    signCarrier:  $('#m_signCarrier')?.value.trim(),
+    twoFactor:    $('#m_twoFactor')?.checked,
+    signature_data: window.getSignature ? window.getSignature() : null
   };
   if(!rec.employee){ toast('Укажите ФИО','error'); return; }
   try{
@@ -949,7 +988,10 @@ function printAct(r){
 
       <div class="sign">
         <div>Выдал: ${esc(session.fullName)}<br><br><br></div>
-        <div>Принял: ${esc(r.employee)}<br><br><br></div>
+        <div>
+          Принял: ${esc(r.employee)}<br><br>
+          ${r.signature_data ? `<img src="${r.signature_data}" style="max-height:60px; max-width:200px; display:block; margin:0 auto;">` : '<br><br>'}
+        </div>
       </div>
     </div>`;
   
@@ -1134,6 +1176,37 @@ async function renderProfile(){
     try{ await API.changePassword(oldP, np); toast('Пароль изменён','ok'); $('#p_old').value=$('#p_new').value=$('#p_new2').value=''; }
     catch(ex){ toast(ex.message,'error'); }
   };
+}
+let editEmpId = null;
+
+function openEmployeeModal(emp) {
+  editEmpId = emp ? emp.id : null;
+  $('#modalTitle').textContent = emp ? 'Редактировать сотрудника' : 'Новый сотрудник';
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label class="full">ФИО сотрудника<input id="e_name" value="${esc(emp?.full_name)}" required></label>
+      <label>Должность<input id="e_pos" value="${esc(emp?.position)}"></label>
+      <label>Подразделение<input id="e_dept" value="${esc(emp?.department)}"></label>
+    </div>`;
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="eCancel">Отмена</button>
+    <button class="btn primary" id="eSave">Сохранить</button>`;
+  
+  $('#eCancel').onclick = closeModal;
+  $('#eSave').onclick = async () => {
+    const rec = {
+      full_name: $('#e_name').value.trim(),
+      position: $('#e_pos').value.trim(),
+      department: $('#e_dept').value.trim()
+    };
+    if(!rec.full_name) { toast('Укажите ФИО', 'error'); return; }
+    try {
+      if(editEmpId) await API.updEmployee(editEmpId, rec);
+      else await API.addEmployee(rec);
+      closeModal(); await renderEmployees(); toast('Сохранено', 'ok');
+    } catch(ex) { toast(ex.message, 'error'); }
+  };
+  $('#backdrop').classList.add('open');
 }
 
 async function renderEmployees(){
