@@ -12,6 +12,40 @@ export default async function(app){
     return rows;
   });
 
+    app.post('/types', { preHandler: requireRole('admin') }, async (req, reply) => {
+    const { code, name, title, default_valid_years, description } = req.body;
+    if (!code || !name || !title) return reply.code(400).send({error:'Заполните код, имя и название'});
+    try {
+      const { rows } = await q(`
+        INSERT INTO cert_types (code, name, title, default_valid_years, description) 
+        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [code, name, title, default_valid_years || 2, description || '']);
+      return rows[0];
+    } catch(e) {
+      if(e.code === '23505') return reply.code(409).send({error:'Тип с таким кодом уже существует'});
+      throw e;
+    }
+  });
+
+  app.patch('/types/:code', { preHandler: requireRole('admin') }, async (req, reply) => {
+    const { name, title, default_valid_years, description } = req.body;
+    const { rows } = await q(`
+      UPDATE cert_types SET name=$1, title=$2, default_valid_years=$3, description=$4
+      WHERE code=$5 RETURNING *`,
+      [name, title, default_valid_years, description, req.params.code]);
+    return rows[0];
+  });
+
+  app.delete('/types/:code', { preHandler: requireRole('admin') }, async (req, reply) => {
+    try {
+      await q('DELETE FROM cert_types WHERE code=$1', [req.params.code]);
+      return { ok: true };
+    } catch(e) {
+      if(e.code === '23503') return reply.code(400).send({error:'Нельзя удалить: этот тип уже используется в сертификатах'});
+      throw e;
+    }
+  });
+
   // список сертификатов (можно фильтровать)
   app.get('/', async (req)=>{
     const { expiring, carrier_id, purpose } = req.query;
@@ -46,7 +80,7 @@ export default async function(app){
   });
 
   // создать сертификат
-  app.post('/', requireRole('admin','operator'), async (req,reply)=>{
+  app.post('/', { preHandler: [requireRole('admin','operator')] }, async (req,reply)=>{
     const b = req.body||{};
     if(!b.carrierId || !b.certType || !b.validFrom)
       return reply.code(400).send({error:'carrierId, certType, validFrom обязательны'});
@@ -83,7 +117,7 @@ export default async function(app){
   });
 
   // изменить
-  app.patch('/:id', requireRole('admin','operator'), async (req,reply)=>{
+  app.patch('/:id', { preHandler: [requireRole('admin','operator')] }, async (req,reply)=>{
     const b = req.body||{};
     // пересчёт valid_to, если поменяли valid_from или тип
     let validTo = b.validTo;
@@ -116,7 +150,7 @@ export default async function(app){
     return rows[0];
   });
 
-  app.delete('/:id', requireRole('admin','operator'), async (req)=>{
+  app.delete('/:id', { preHandler: [requireRole('admin','operator')] }, async (req)=>{
     await q('DELETE FROM certificates WHERE id=$1',[req.params.id]);
     await q(`INSERT INTO audit(user_id,user_name,action,entity,entity_id)
              VALUES($1,$2,'cert_delete','certificate',$3)`,

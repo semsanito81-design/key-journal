@@ -12,7 +12,7 @@ export default async function(app){
     if(search){ params.push(`%${search}%`);
       cond.push(`(employee ILIKE $${params.length} OR position ILIKE $${params.length}
         OR department ILIKE $${params.length} OR carrier_serial ILIKE $${params.length})`); }
-    if(status){ params.push(status); cond.push(`status=$${params.length}`); }
+   //if(status){ params.push(status); cond.push(`status=$${params.length}`); }
     if(carrier){ params.push(carrier); cond.push(`carrier_type=$${params.length}`); }
     const where = cond.length?'WHERE '+cond.join(' AND '):'';
     const { rows } = await q(

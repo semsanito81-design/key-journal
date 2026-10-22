@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Журнал ключевых носителей</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -75,9 +76,9 @@ input,select,textarea{font:inherit}
   border:1px solid var(--line)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;
-  white-space:nowrap}
+  vertical-align:top;}
 th{background:#f8fafc;font-weight:600;font-size:12px;color:var(--muted);
-  position:sticky;top:0;cursor:pointer;user-select:none}
+  position:sticky;top:0;cursor:pointer;user-select:none;z-index:2}
 th:hover{background:#eef2ff}
 th.sorted::after{content:" ▲";font-size:10px}
 th.sorted.desc::after{content:" ▼"}
@@ -89,15 +90,24 @@ td.num{font-variant-numeric:tabular-nums}
 .badge.returned{background:#e0e7ff;color:#3730a3}
 .badge.expired{background:#fee2e2;color:#991b1b}
 .badge.reserved{background:#fef3c7;color:#92400e}
+.badge.revoked{background:#fce7f3;color:#9d174d}
 .exp-red{color:var(--danger);font-weight:600}
 .exp-warn{color:var(--warn);font-weight:600}
 .empty{padding:40px;text-align:center;color:var(--muted)}
+/* Новые стили для гибкой таблицы и бейджей */
+table { width: auto; min-width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }
+td.wrap-text { white-space: normal; min-width: 250px; } /* Чтобы сертификаты переносились на новую строку, если не влезают */
 
 /* TOOLBAR */
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
 .toolbar input,.toolbar select{padding:7px 10px;border:1px solid var(--line);
   border-radius:8px;font-size:13px;min-width:140px}
 .toolbar .spacer{flex:1}
+.toolbar .chk{display:flex;align-items:center;gap:6px;font-size:13px;
+  padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;
+  cursor:pointer;user-select:none}
+.toolbar .chk input{width:auto;min-width:0}
 
 /* CARDS */
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
@@ -106,6 +116,7 @@ td.num{font-variant-numeric:tabular-nums}
   padding:14px 16px}
 .card .label{font-size:12px;color:var(--muted)}
 .card .value{font-size:26px;font-weight:700;margin-top:4px}
+.card .sub{font-size:11px;color:var(--muted);margin-top:4px}
 .card.warn .value{color:var(--warn)}
 .card.danger .value{color:var(--danger)}
 .card.ok .value{color:var(--ok)}
@@ -126,8 +137,8 @@ td.num{font-variant-numeric:tabular-nums}
 .form label.check{flex-direction:row;align-items:center;gap:8px;
   font-size:13px;color:var(--text)}
 .form input,.form select,.form textarea{padding:8px 10px;border:1px solid var(--line);
-  border-radius:8px}
-.form input:focus,.form select:focus{outline:2px solid #bfdbfe;
+  border-radius:8px;background:#fff}
+.form input:focus,.form select:focus,.form textarea:focus{outline:2px solid #bfdbfe;
   border-color:var(--accent)}
 .modal footer{padding:14px 20px;border-top:1px solid var(--line);
   display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;
@@ -146,25 +157,34 @@ td.num{font-variant-numeric:tabular-nums}
   display:grid;grid-template-columns:170px 140px 1fr;gap:10px}
 .log-item .time{color:var(--muted);font-size:12px}
 .log-item .who{font-weight:600}
-.log-item .what{color:var(--text)}
-.log-item details{margin-top:4px;grid-column:1/-1;font-size:12px;
-  color:var(--muted)}
+.log-item details{margin-top:4px;grid-column:1/-1;font-size:12px;color:var(--muted)}
 .log-item pre{background:#f8fafc;padding:6px;border-radius:6px;
   overflow:auto;font-size:11px;margin:4px 0 0}
 
 /* PRINT */
-@media print{
-  body{background:#fff}
-  #app,.topbar,.toolbar,.sidebar,.backdrop,.toast{display:none!important}
-  #printArea{display:block!important;padding:0}
-  .act{font-family:Georgia,serif;color:#000}
-  .act h1{font-size:18px;text-align:center;margin:0 0 16px}
-  .act table{width:100%;border-collapse:collapse;font-size:13px}
-  .act td,.act th{border:1px solid #000;padding:8px;white-space:normal}
-  .act .sign{margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px}
-  .act .sign div{border-top:1px solid #000;padding-top:6px;text-align:center}
+@media print {
+  @page { size: A4 landscape; margin: 10mm; } /* Горизонтальная ориентация и отступы 1 см */
+  body { background: #fff; font-size: 12px; color: #000; }
+  #app, .topbar, .toolbar, .sidebar, .backdrop, .toast, .content { display: none !important; }
+  
+  #printArea { display: block !important; width: 100%; padding: 0; }
+  .act { font-family: 'Times New Roman', serif; color: #000; }
+  .act h1 { font-size: 18px; text-align: center; margin: 0 0 15px; text-transform: uppercase; }
+  .act p { margin: 5px 0; }
+  
+  /* Таблица носителя */
+  .act table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px; }
+  .act th, .act td { border: 1px solid #000; padding: 4px 8px; text-align: left; }
+  
+  /* Убираем бейджи и делаем статус текстом */
+  .act .badge { border: none; padding: 0; font-weight: normal; background: none !important; color: #000 !important; font-size: 12px; }
+  .act .exp-red { color: #000 !important; font-weight: bold; }
+  
+  /* Подписи */
+  .act .sign { margin-top: 30px; display: flex; justify-content: space-between; gap: 40px; page-break-inside: avoid; }
+  .act .sign div { width: 45%; border-top: 1px solid #000; padding-top: 5px; text-align: center; font-size: 12px; }
 }
-#printArea{display:none}
+#printArea { display: none; }
 
 @media(max-width:900px){
   #app{grid-template-columns:1fr}
@@ -177,7 +197,6 @@ td.num{font-variant-numeric:tabular-nums}
 </head>
 <body>
 
-<!-- LOGIN -->
 <div id="loginScreen">
   <form class="login-card" id="loginForm">
     <h1>🔑 Журнал ключевых носителей</h1>
@@ -190,13 +209,14 @@ td.num{font-variant-numeric:tabular-nums}
   </form>
 </div>
 
-<!-- APP -->
 <div id="app" class="hidden">
   <aside class="sidebar" id="sidebar">
     <div class="brand">🔑 Журнал носителей</div>
     <nav class="nav">
-      <a href="#journal" data-view="journal">📋 Журнал</a>
       <a href="#dashboard" data-view="dashboard">📊 Дашборд</a>
+      <a href="#journal" data-view="journal">📋 Журнал</a>      
+      <a href="#employees" data-view="employees">👤 Сотрудники</a>
+      <a href="#types" data-view="types" data-role="admin">🏷 Типы сертификатов</a>
       <a href="#users" data-view="users" data-role="admin">👥 Пользователи</a>
       <a href="#audit" data-view="audit" data-role="admin,auditor">📜 Аудит-лог</a>
       <div class="nav-sep"></div>
@@ -219,7 +239,6 @@ td.num{font-variant-numeric:tabular-nums}
   </main>
 </div>
 
-<!-- MODAL -->
 <div class="backdrop" id="backdrop">
   <div class="modal">
     <h2 id="modalTitle"></h2>
@@ -233,7 +252,7 @@ td.num{font-variant-numeric:tabular-nums}
 
 <script>
 /* ============================================================
-   API-КЛИЕНТ
+   API
    ============================================================ */
 const API = {
   async req(method,url,body){
@@ -243,16 +262,11 @@ const API = {
       credentials:'include',
       body: body ? JSON.stringify(body) : undefined
     });
-    if(r.status===401){
-      // сессия истекла — показать логин
-      session = null;
-      showLogin();
-      throw new Error('Не авторизован');
-    }
+    if(r.status===401){ session=null; showLogin(); throw new Error('Не авторизован'); }
     if(!r.ok){
-      let err = r.statusText;
-      try{ err = (await r.json()).error || err; }catch{}
-      throw new Error(err);
+      let msg = r.statusText;
+      try{ msg = (await r.json()).error || msg; }catch{}
+      throw new Error(msg);
     }
     if(r.status===204) return null;
     return r.json();
@@ -263,11 +277,26 @@ const API = {
   changePassword:(oldPassword,newPassword)=>
     API.req('POST','/api/auth/change-password',{oldPassword,newPassword}),
 
-  carriers:(f={})=>API.req('GET','/api/carriers?'+new URLSearchParams(
+  carriers:(f={})=>API.req('GET','/api/carriers?with=certificates&'+new URLSearchParams(
     Object.fromEntries(Object.entries(f).filter(([,v])=>v!=null && v!=='')))),
   addCarrier:c=>API.req('POST','/api/carriers',c),
   updCarrier:(id,c)=>API.req('PATCH','/api/carriers/'+id,c),
   delCarrier:id=>API.req('DELETE','/api/carriers/'+id),
+
+  certTypes:()=>API.req('GET','/api/certificates/types'),
+  addCertType:(t)=>API.req('POST','/api/certificates/types',t),
+  updCertType:(c,t)=>API.req('PATCH','/api/certificates/types/'+c,t),
+  delCertType:(c)=>API.req('DELETE','/api/certificates/types/'+c),
+
+  certs:(f={})=>API.req('GET','/api/certificates?'+new URLSearchParams(f)),
+  addCert:c=>API.req('POST','/api/certificates',c),
+  updCert:(id,c)=>API.req('PATCH','/api/certificates/'+id,c),
+  delCert:id=>API.req('DELETE','/api/certificates/'+id),
+
+  employees:()=>API.req('GET','/api/employees'),
+  addEmployee:(e)=>API.req('POST','/api/employees',e),
+  updEmployee:(id,e)=>API.req('PATCH','/api/employees/'+id,e),
+  delEmployee:(id)=>API.req('DELETE','/api/employees/'+id),
 
   users:()=>API.req('GET','/api/users'),
   addUser:u=>API.req('POST','/api/users',u),
@@ -287,57 +316,31 @@ const DAY = 86400000;
 const fmtDate = s => { if(!s) return '—'; const d=new Date(s);
   return isNaN(d)?esc(s):d.toLocaleDateString('ru-RU'); };
 const todayISO = ()=> new Date().toISOString().slice(0,10);
-const newId = ()=> 'tmp_'+Math.random().toString(36).slice(2);
+
+function daysBetween(to){ if(!to) return null; return Math.ceil((new Date(to)-new Date())/DAY); }
+function daysLeftOfCert(c){ if(!c || !c.validTo) return null; return daysBetween(c.validTo); }
+function statusOfCert(c){
+  if(!c) return 'active'; if(c.status==='revoked') return 'revoked'; if(c.status==='reserved') return 'reserved';
+  const dl = daysLeftOfCert(c); if(dl!==null && dl<0) return 'expired'; return 'active';
+}
+function badgeOf(st){
+  return {
+    active:   '<span class="badge active">Активен</span>',
+    returned: '<span class="badge returned">Возвращён</span>',
+    expired:  '<span class="badge expired">Истёк</span>',
+    reserved: '<span class="badge reserved">Резерв</span>',
+    revoked:  '<span class="badge revoked">Отозван</span>',
+  }[st] || '';
+}
 
 let toastTimer;
 function toast(msg,type=''){
-  const t=$('#toast');
-  t.textContent=msg; t.className='toast show '+type;
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
+  const t=$('#toast'); t.textContent=msg; t.className='toast show '+type;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
 }
+function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
-/* ============================================================
-   РАСЧЁТЫ (совпадают с backend-логикой отображения)
-   ============================================================ */
-function endDate(startStr){
-  if(!startStr) return '';
-  const d = new Date(startStr);
-  if(isNaN(d)) return '';
-  d.setFullYear(d.getFullYear()+2);
-  return d.toISOString().slice(0,10);
-}
-function daysLeft(endStr){
-  if(!endStr) return null;
-  return Math.ceil((new Date(endStr) - new Date()) / DAY);
-}
-function formatPeriod(startStr,endStr){
-  if(!startStr||!endStr) return '—';
-  const s=new Date(startStr), e=new Date(endStr);
-  let y=e.getFullYear()-s.getFullYear();
-  let m=e.getMonth()-s.getMonth();
-  let d=e.getDate()-s.getDate();
-  if(d<0){ m--; d += new Date(e.getFullYear(),e.getMonth(),0).getDate(); }
-  if(m<0){ y--; m+=12; }
-  return `${y}г. ${m} мес. ${d} дн.`;
-}
-function statusOf(row){
-  if(row.status==='returned') return 'returned';
-  if(row.status==='reserved') return 'reserved';
-  const dl = daysLeft(endDate(row.cert_start || row.certStart));
-  if(dl!==null && dl<0) return 'expired';
-  return 'active';
-}
-function statusBadge(st){
-  return {
-    active:'<span class="badge active">Активен</span>',
-    returned:'<span class="badge returned">Возвращён</span>',
-    expired:'<span class="badge expired">Истёк</span>',
-    reserved:'<span class="badge reserved">Резерв</span>'
-  }[st]||'';
-}
 function normCarrier(r){
-  // API возвращает snake_case — приводим к camelCase для UI
   return {
     id: r.id, ppp: r.ppp,
     issueDate: r.issue_date ? r.issue_date.slice(0,10) : '',
@@ -346,14 +349,25 @@ function normCarrier(r){
     employee: r.employee,
     position: r.position,
     department: r.department,
-    certType: r.cert_type,
-    certStart: r.cert_start ? r.cert_start.slice(0,10) : '',
-    certSerial: r.cert_serial,
-    returnMark: r.return_mark ? r.return_mark.slice(0,10) : '',
     status: r.status,
     signCert: r.sign_cert,
     signCarrier: r.sign_carrier,
     twoFactor: r.two_factor,
+    returnMark: r.return_mark ? r.return_mark.slice(0,10) : '',
+    certificates: (r.certificates||[]).map(normCert),
+  };
+}
+function normCert(c){
+  return {
+    id: c.id, carrierId: c.carrier_id,
+    certType: c.cert_type,
+    typeName: c.type_name,
+    typeTitle: c.type_title,
+    serialNumber: c.serial_number,
+    validFrom: c.valid_from ? c.valid_from.slice(0,10) : '',
+    validTo: c.valid_to ? c.valid_to.slice(0,10) : '',
+    status: c.status,
+    note: c.note,
   };
 }
 function normUser(u){
@@ -361,11 +375,7 @@ function normUser(u){
            active:u.active, created:u.created, lastLogin:u.last_login };
 }
 
-/* ============================================================
-   AUTH
-   ============================================================ */
 let session = null;
-
 async function tryAutoLogin(){
   try{
     const u = await API.me();
@@ -373,15 +383,9 @@ async function tryAutoLogin(){
     return true;
   }catch{ return false; }
 }
-
-function showLogin(){
-  $('#loginScreen').classList.remove('hidden');
-  $('#app').classList.add('hidden');
-}
-function showApp(){
-  $('#loginScreen').classList.add('hidden');
-  $('#app').classList.remove('hidden');
-}
+function showLogin(){ $('#loginScreen').classList.remove('hidden'); $('#app').classList.add('hidden'); }
+function showApp(){ $('#loginScreen').classList.add('hidden'); $('#app').classList.remove('hidden'); }
+function can(roles){ return session && roles.split(',').includes(session.role); }
 
 $('#loginForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -392,54 +396,41 @@ $('#loginForm').addEventListener('submit', async e=>{
     showApp(); bootApp();
   }catch(ex){ err.textContent = ex.message; }
 });
+$('#btnLogout').onclick = async ()=>{ try{ await API.logout(); }catch{} session=null; showLogin(); };
+$('#btnMenu').onclick = ()=> $('#sidebar').classList.toggle('open');
 
-async function logout(){
-  try{ await API.logout(); }catch{}
-  session = null; showLogin();
-}
-$('#btnLogout').onclick = logout;
-
-function can(roles){ return session && roles.split(',').includes(session.role); }
-
-/* ============================================================
-   APP SHELL
-   ============================================================ */
 let currentView = 'journal';
-let page = 1, pageSize = 25;
-let sortKey = 'ppp', sortDesc = false;
-let filters = { q:'', status:'', carrier:'' };
-let journalData = []; // кэш последнего ответа API для сортировки/пагинации
+let certTypes = [];
 
 function bootApp(){
   $('#ub_name').textContent = session.fullName;
   $('#ub_role').textContent = session.role;
-  $$('.nav a[data-role]').forEach(a=>{
-    a.classList.toggle('hidden', !can(a.dataset.role));
-  });
+  $$('.nav a[data-role]').forEach(a=>a.classList.toggle('hidden', !can(a.dataset.role)));
   if(window.innerWidth<=900) $('#btnMenu').style.display='inline-flex';
   window.removeEventListener('hashchange', route);
   window.addEventListener('hashchange', route);
+  API.certTypes().then(t=>{ certTypes = t; }).catch(()=>{});
   route();
 }
-
-$('#btnMenu').onclick = ()=> $('#sidebar').classList.toggle('open');
 
 async function route(){
   const h = location.hash.replace('#','') || 'journal';
   const allowed = {
-    journal:()=>true, dashboard:()=>true, profile:()=>true,
-    users:()=>can('admin'), audit:()=>can('admin,auditor')
+    dashboard:()=>true, journal:()=>true, employees:()=>true, profile:()=>true,
+    types:()=>can('admin'), users:()=>can('admin'), audit:()=>can('admin,auditor')
   };
   if(!allowed[h] || !allowed[h]()){ location.hash='journal'; return; }
   currentView = h;
   $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===h));
-  const titles = {journal:'Журнал',dashboard:'Дашборд',users:'Пользователи',
-                  audit:'Аудит-лог',profile:'Профиль'};
+  const titles = {dashboard:'Дашборд',journal:'Журнал',employees:'Сотрудники',types:'Типы сертификатов',
+                  users:'Пользователи',audit:'Аудит-лог',profile:'Профиль'};
   $('#viewTitle').textContent = titles[h]||'';
   await renderTopbarActions();
   try{
-    if(h==='journal')   await renderJournal();
     if(h==='dashboard') await renderDashboard();
+    if(h==='journal')   await renderJournal();
+    if(h==='employees') await renderEmployees();    
+    if(h==='types')     await renderTypes();
     if(h==='users')     await renderUsers();
     if(h==='audit')     await renderAudit();
     if(h==='profile')   await renderProfile();
@@ -451,7 +442,7 @@ async function route(){
 async function renderTopbarActions(){
   const box = $('#topbarActions'); box.innerHTML='';
   if(currentView==='journal' && can('admin,operator')){
-    box.innerHTML = `<button class="btn primary" id="tbAdd">➕ Добавить</button>
+    box.innerHTML = `<button class="btn primary" id="tbAdd">➕ Носитель</button>
       <label class="btn" style="cursor:pointer">📥 Импорт Excel
         <input type="file" id="tbImport" accept=".xlsx,.xls" hidden></label>
       <button class="btn" id="tbExport">⬇️ Экспорт CSV</button>
@@ -465,23 +456,57 @@ async function renderTopbarActions(){
     box.innerHTML = `<button class="btn primary" id="tbAddUser">➕ Пользователь</button>`;
     $('#tbAddUser').onclick = ()=>openUserModal(null);
   }
+  if(currentView==='types' && can('admin')){
+    box.innerHTML = `<button class="btn primary" id="tbAddType">➕ Тип</button>`;
+    $('#tbAddType').onclick = ()=>openTypeModal(null);
+  }
 }
 
 /* ============================================================
-   ЖУРНАЛ
+   ЖУРНАЛ (Сводный вид)
    ============================================================ */
+let journalData = [];
+let filters = { q:'', status:'' };
+let sortKey = 'ppp', sortDesc = false;
+let page = 1, pageSize = 50;
+
+const SORT_ACCESSORS = {
+  ppp:           r => r.ppp ?? 0,
+  carrierType:   r => r.carrierType || '',
+  carrierSerial: r => r.carrierSerial || '',
+  employee:      r => r.employee || '',
+};
+
+function getSorted(rows){
+  const get = SORT_ACCESSORS[sortKey] || (r => r[sortKey]);
+  const arr = [...rows];
+  arr.sort((a,b)=>{
+    let va = get(a), vb = get(b);
+    if(va==null) va=''; if(vb==null) vb='';
+    if(typeof va==='number' && typeof vb==='number') return sortDesc?vb-va:va-vb;
+    return sortDesc
+      ? String(vb).localeCompare(String(va),'ru',{numeric:true})
+      : String(va).localeCompare(String(vb),'ru',{numeric:true});
+  });
+  return arr;
+}
+
+function head(key,label){
+  const sorted = sortKey===key;
+  return `<th data-key="${key}" class="${sorted?'sorted'+(sortDesc?' desc':''):''}">${label}</th>`;
+}
+
 async function renderJournal(){
-  const html = `
+  $('#content').innerHTML = `
     <div class="toolbar">
       <input id="fl_q" placeholder="Поиск: ФИО, номер, подразделение…" value="${esc(filters.q)}">
       <select id="fl_status">
         <option value="">Все статусы</option>
-        ${['active','returned','expired','reserved'].map(s=>
+        ${['active','expired','revoked','reserved'].map(s=>
           `<option value="${s}" ${filters.status===s?'selected':''}>${
-            {active:'Активен',returned:'Возвращён',expired:'Истёк',reserved:'Резерв'}[s]
+            {active:'Активен',expired:'Истёк',revoked:'Отозван',reserved:'Резерв'}[s]
           }</option>`).join('')}
       </select>
-      <select id="fl_carrier"><option value="">Все носители</option></select>
       <span class="spacer"></span>
       <span id="fl_stat" style="color:var(--muted)"></span>
     </div>
@@ -489,13 +514,12 @@ async function renderJournal(){
       <table>
         <thead>
           <tr>
-            ${head('ppp','№')}${head('issueDate','Дата выдачи')}
-            ${head('carrierType','Носитель')}${head('carrierSerial','Серия/номер')}
-            ${head('employee','ФИО')}${head('position','Должность')}
-            ${head('department','Подразделение')}${head('certType','Серт.')}
-            ${head('certStart','Начало')}${head('__end','Окончание')}
-            ${head('__period','Срок')}${head('daysLeft','Осталось')}
-            ${head('returnMark','Возврат')}${head('__status','Статус')}
+            ${head('ppp','№')}
+            ${head('carrierType','Носитель')}
+            ${head('carrierSerial','Серийный №')}
+            ${head('employee','ФИО сотрудника')}
+            <th>Сертификаты (Выпущен — Действует до)</th>
+            <th>Статус серт.</th>
             <th></th>
           </tr>
         </thead>
@@ -504,24 +528,15 @@ async function renderJournal(){
     </div>
     <div class="toolbar" style="margin-top:12px" id="pager"></div>
   `;
-  $('#content').innerHTML = html;
-
-  // обработчики фильтров
-  $('#fl_q').oninput = debounce(async e=>{
-    filters.q = e.target.value; page = 1; await loadAndDraw();
-  }, 300);
-  $('#fl_status').onchange = async e=>{
-    filters.status = e.target.value; page = 1; await loadAndDraw();
-  };
-  $('#fl_carrier').onchange = async e=>{
-    filters.carrier = e.target.value; page = 1; await loadAndDraw();
-  };
+  
+  $('#fl_q').oninput = debounce(async e=>{ filters.q = e.target.value; page=1; await loadAndDraw(); }, 300);
+  $('#fl_status').onchange = async e=>{ filters.status = e.target.value; page=1; await loadAndDraw(); };
+  
   $$('th[data-key]').forEach(th=>th.onclick=()=>{
     const k=th.dataset.key;
     if(sortKey===k) sortDesc=!sortDesc; else {sortKey=k; sortDesc=false;}
     drawJournalTable();
   });
-
   await loadAndDraw();
 }
 
@@ -529,157 +544,181 @@ async function loadAndDraw(){
   try{
     const raw = await API.carriers(filters);
     journalData = raw.map(normCarrier);
-    // заполнить фильтр носителей (из полученных + сохранённые в текущем наборе)
-    const carriers = [...new Set(journalData.map(r=>r.carrierType).filter(Boolean))];
-    const sel = $('#fl_carrier');
-    if(sel){
-      const cur = filters.carrier;
-      sel.innerHTML = '<option value="">Все носители</option>'+carriers.map(c=>
-        `<option ${cur===c?'selected':''}>${esc(c)}</option>`).join('');
-    }
     drawJournalTable();
   }catch(ex){ toast(ex.message,'error'); }
 }
 
-function head(key,label){
-  const sorted = sortKey===key;
-  return `<th data-key="${key}" class="${sorted?'sorted'+(sortDesc?' desc':''):''}">${label}</th>`;
-}
-
-function getSorted(){
-  const arr = [...journalData];
-  arr.sort((a,b)=>{
-    let va = sortKey==='daysLeft' ? (daysLeft(endDate(a.certStart)) ?? 1e9) : a[sortKey];
-    let vb = sortKey==='daysLeft' ? (daysLeft(endDate(b.certStart)) ?? 1e9) : b[sortKey];
-    if(va==null) va=''; if(vb==null) vb='';
-    if(typeof va==='number' && typeof vb==='number') return sortDesc?vb-va:va-vb;
-    return sortDesc ? String(vb).localeCompare(String(va),'ru')
-                    : String(va).localeCompare(String(vb),'ru');
-  });
-  return arr;
-}
-
 function drawJournalTable(){
-  const rows = getSorted();
-  const total = rows.length;
-  const pages = Math.max(1,Math.ceil(total/pageSize));
+  let base = [...journalData];
+  if(filters.status){
+    base = base.filter(r => {
+      if(!r.certificates?.length) return filters.status === 'active';
+      return r.certificates.some(c => statusOfCert(c) === filters.status);
+    });
+  }
+
+  const sorted = getSorted(base);
+  const total = sorted.length;
+  const pages = Math.max(1, Math.ceil(total/pageSize));
   if(page>pages) page=pages;
-  const slice = rows.slice((page-1)*pageSize, page*pageSize);
+  const slice = sorted.slice((page-1)*pageSize, page*pageSize);
 
   const tb = $('#tbody');
   if(!slice.length){
-    tb.innerHTML = `<tr><td colspan="15" class="empty">Пока нет записей</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="6" class="empty">Нет записей</td></tr>`;
   }else{
     tb.innerHTML = slice.map(r=>{
-      const end = endDate(r.certStart);
-      const dl = daysLeft(end);
-      const st = statusOf(r);
-      const leftCls = dl===null?'':dl<0?'exp-red':dl<60?'exp-warn':'';
-      const leftTxt = dl===null?'—':dl<0?`просрочен ${-dl} дн.`:`${dl} дн.`;
+      // Рендер сертификатов в столбик
+      let certsHtml = '';
+      let statusHtml = '';
+      
+      if(!r.certificates || r.certificates.length === 0) {
+        certsHtml = '<span style="color:var(--muted)">Нет сертификатов</span>';
+        statusHtml = '—';
+      } else {
+        certsHtml = r.certificates.map(c => {
+          const type = c.typeName || c.certType;
+          return `<div style="font-size: 12px; margin-bottom: 4px;">
+            <b>${type}</b>: ${fmtDate(c.validFrom)} — ${fmtDate(c.validTo)}
+          </div>`;
+        }).join('');
+
+        statusHtml = r.certificates.map(c => {
+          const dl = daysLeftOfCert(c);
+          if (dl === null) return '<div style="font-size: 12px; margin-bottom: 4px;">—</div>';
+          
+          const isExp = dl < 0;
+          const isWarn = dl >= 0 && dl < 60;
+          const cls = isExp ? 'badge expired' : (isWarn ? 'badge reserved' : 'badge active');
+          const text = isExp ? `Истёк (-${-dl} дн.)` : `Осталось ${dl} дн.`;
+          
+          return `<div style="margin-bottom: 4px;"><span class="${cls}" style="font-size:11px;">${text}</span></div>`;
+        }).join('');
+      }
+
       return `<tr>
-        <td class="num">${r.ppp??''}</td>
-        <td class="num">${fmtDate(r.issueDate)}</td>
+        <td class="num">${r.ppp ?? ''}</td>
         <td>${esc(r.carrierType)}</td>
-        <td class="num">${esc(r.carrierSerial)}</td>
-        <td><b>${esc(r.employee)}</b></td>
-        <td>${esc(r.position)}</td>
-        <td>${esc(r.department)}</td>
-        <td class="num">${r.certType??''}</td>
-        <td class="num">${fmtDate(r.certStart)}</td>
-        <td class="num">${fmtDate(end)}</td>
-        <td class="num">${formatPeriod(r.certStart,end)}</td>
-        <td class="num ${leftCls}">${leftTxt}</td>
-        <td>${r.returnMark?fmtDate(r.returnMark):'—'}</td>
-        <td>${statusBadge(st)}</td>
+        <td class="num"><b>${esc(r.carrierSerial)}</b></td>
         <td>
-          ${can('admin,operator')?`
-            <button class="btn sm" data-act="edit" data-id="${r.id}" title="Ред.">✏️</button>
-            <button class="btn sm" data-act="print" data-id="${r.id}" title="Акт">🖨</button>
-            <button class="btn sm danger" data-act="del" data-id="${r.id}" title="Удалить">🗑</button>
+          <b>${esc(r.employee)}</b><br>
+          <span style="font-size:11px; color:var(--muted)">${esc(r.position||'')} ${r.department?'· '+esc(r.department):''}</span>
+        </td>
+        <td class="wrap-text">${certsHtml}</td>
+        <td>${statusHtml}</td>
+        <td style="text-align: right;">
+          ${can('admin,operator') ? `
+            <div style="display: flex; gap: 4px; justify-content: flex-end;">
+              <button class="btn sm" data-act="addCert" data-id="${r.id}" title="Добавить серт.">➕</button>
+              <button class="btn sm" data-act="editCarrier" data-id="${r.id}" title="Ред. носитель">📝</button>
+              <button class="btn sm" data-act="printAct" data-id="${r.id}" title="Акт">🖨</button>
+              <button class="btn sm danger" data-act="delCarrier" data-id="${r.id}" title="Удалить носитель">🗑</button>
+            </div>
           `:''}
         </td>
       </tr>`;
     }).join('');
   }
+  
   $('#fl_stat').textContent = `Записей: ${total}`;
   $('#pager').innerHTML = total<=pageSize ? '' : `
     <button class="btn sm" ${page===1?'disabled':''} id="pgPrev">← Назад</button>
     <span style="color:var(--muted)">Стр. ${page} из ${pages}</span>
     <button class="btn sm" ${page===pages?'disabled':''} id="pgNext">Вперёд →</button>
     <select id="pgSize" style="margin-left:auto">
-      ${[10,25,50,100].map(n=>`<option ${n===pageSize?'selected':''}>${n}</option>`).join('')}
+      ${[10,25,50,100,200].map(n=>`<option ${n===pageSize?'selected':''}>${n}</option>`).join('')}
     </select>`;
   if($('#pgPrev')) $('#pgPrev').onclick = ()=>{page--; drawJournalTable();};
   if($('#pgNext')) $('#pgNext').onclick = ()=>{page++; drawJournalTable();};
   if($('#pgSize')) $('#pgSize').onchange = e=>{pageSize=+e.target.value; page=1; drawJournalTable();};
 
-  tb.onclick = async e=>{
-    const b = e.target.closest('button[data-act]'); if(!b) return;
-    const id = b.dataset.id;
-    if(b.dataset.act==='edit'){
-      const row = journalData.find(x=>x.id===id);
-      openCarrierModal(row);
+  tb.onclick = handleTableClick;
+}
+
+async function handleTableClick(e){
+  const b = e.target.closest('button[data-act]'); if(!b) return;
+  const id = b.dataset.id, act = b.dataset.act;
+
+  if(act==='editCarrier'){
+    const r = journalData.find(x=>x.id===id);
+    return openCarrierModal(r);
+  }
+  if(act==='addCert') return openCertModal(id, null);
+  if(act==='editCert'){
+    for(const r of journalData){
+      const c = r.certificates?.find(x=>x.id===id);
+      if(c) return openCertModal(r.id, c);
     }
-    if(b.dataset.act==='del'){
-      if(!confirm('Удалить запись?')) return;
-      try{
-        await API.delCarrier(id);
-        toast('Удалено','ok');
-        await loadAndDraw();
-      }catch(ex){ toast(ex.message,'error'); }
-    }
-    if(b.dataset.act==='print'){
-      const row = journalData.find(x=>x.id===id);
-      if(row) printAct(row);
-    }
-  };
+    return;
+  }
+  if(act==='delCert'){
+    if(!confirm('Удалить сертификат?')) return;
+    try{ await API.delCert(id); await loadAndDraw(); toast('Удалено','ok'); }
+    catch(ex){ toast(ex.message,'error'); }
+    return;
+  }
+  if(act==='delCarrier'){
+    if(!confirm('Удалить носитель со всеми сертификатами?')) return;
+    try{ await API.delCarrier(id); await loadAndDraw(); toast('Удалено','ok'); }
+    catch(ex){ toast(ex.message,'error'); }
+    return;
+  }
+  if(act==='printAct'){
+    const r = journalData.find(x=>x.id===id);
+    if(r) printAct(r);
+  }
 }
 
 /* ============================================================
-   МОДАЛКА КАРТОЧКИ
+   МОДАЛКА НОСИТЕЛЯ
    ============================================================ */
 let editCarrierId = null;
-function openCarrierModal(row){
-  editCarrierId = row?row.id:null;
-  $('#modalTitle').textContent = row?'Редактирование записи':'Новая запись';
-  const carriers = ['JaCarta PKI','eToken 5110','eTokenPRO Java',
-    'eToken Pro 64k Card 4.2b','IDCore30B eToken 1.7.7','смарт-карта'];
+let allEmployees = []; // кэш сотрудников
+
+async function openCarrierModal(row){
+  editCarrierId = row ? row.id : null;
+  $('#modalTitle').textContent = row ? 'Редактирование носителя' : 'Новый носитель';
+  const types = ['JaCarta PKI','eToken 5110','eTokenPRO Java','eToken Pro 64k Card 4.2b','IDCore30B eToken 1.7.7','смарт-карта'];
+  
+  // Загружаем сотрудников
+  try { allEmployees = await API.employees(); } catch(e){ allEmployees = []; }
+
   $('#modalBody').innerHTML = `
     <div class="form">
+      <label class="full">Сотрудник (начните вводить ФИО)
+        <input id="m_employee_search" list="emp_list" placeholder="Выберите или введите ФИО..." value="${esc(row?.employee)}" autocomplete="off">
+        <datalist id="emp_list">
+          ${allEmployees.map(e => `<option value="${esc(e.full_name)}">${esc(e.position||'')} ${esc(e.department||'')}</option>`).join('')}
+        </datalist>
+      </label>
+      
       <label>Дата выдачи<input type="date" id="m_issueDate" value="${row?.issueDate||todayISO()}"></label>
       <label>Вид носителя
-        <select id="m_carrierType">${carriers.map(c=>
-          `<option ${row?.carrierType===c?'selected':''}>${c}</option>`).join('')}</select>
+        <select id="m_carrierType">${types.map(c=>`<option ${row?.carrierType===c?'selected':''}>${c}</option>`).join('')}</select>
       </label>
       <label>Номер / серия<input id="m_carrierSerial" value="${esc(row?.carrierSerial)}"></label>
-      <label>ФИО сотрудника<input id="m_employee" required value="${esc(row?.employee)}"></label>
+      
       <label>Должность<input id="m_position" value="${esc(row?.position)}"></label>
       <label>Подразделение<input id="m_department" value="${esc(row?.department)}"></label>
-      <label>Вид сертификата
-        <select id="m_certType">
-          <option value="1" ${row?.certType==1?'selected':''}>1 — аутентификация</option>
-          <option value="2" ${row?.certType==2?'selected':''}>2 — подпись</option>
-          <option value="3" ${row?.certType==3?'selected':''}>3 — шифрование</option>
-        </select>
-      </label>
-      <label>Начало действия<input type="date" id="m_certStart" value="${row?.certStart||todayISO()}"></label>
-      <label>Серийный номер сертификата<input id="m_certSerial" value="${esc(row?.certSerial)}"></label>
-      <label>Отметка о возврате<input type="date" id="m_returnMark" value="${row?.returnMark||''}"></label>
-      <label>Статус
+      <label>Статус носителя
         <select id="m_status">
-          ${['active','returned','reserved'].map(s=>
-            `<option value="${s}" ${row?.status===s?'selected':''}>${
-              {active:'Активен',returned:'Возвращён',reserved:'Резерв'}[s]
-            }</option>`).join('')}
+          ${['active','returned','reserved'].map(s=>`<option value="${s}" ${row?.status===s?'selected':''}>${{active:'Активен',returned:'Возвращён',reserved:'Резерв'}[s]}</option>`).join('')}
         </select>
       </label>
+      
       <label class="full">Роспись (сертификат)<input id="m_signCert" value="${esc(row?.signCert)}"></label>
       <label class="full">Роспись (носитель)<input id="m_signCarrier" value="${esc(row?.signCarrier)}"></label>
-      <label class="check full">
-        <input type="checkbox" id="m_twoFactor" ${row?.twoFactor?'checked':''}>
-        Двухфакторная аутентификация
-      </label>
     </div>`;
+  
+  // При выборе сотрудника из списка автозаполняем должность и подразделение
+  $('#m_employee_search').oninput = (e) => {
+    const emp = allEmployees.find(x => x.full_name === e.target.value);
+    if (emp) {
+      $('#m_position').value = emp.position || '';
+      $('#m_department').value = emp.department || '';
+    }
+  };
+  
   $('#modalFooter').innerHTML = `
     <button class="btn" id="mCancel">Отмена</button>
     <button class="btn primary" id="mSave">Сохранить</button>`;
@@ -696,32 +735,91 @@ async function saveCarrier(){
     employee:     $('#m_employee').value.trim(),
     position:     $('#m_position').value.trim(),
     department:   $('#m_department').value.trim(),
-    certType:     +$('#m_certType').value,
-    certStart:    $('#m_certStart').value || null,
-    certSerial:   $('#m_certSerial').value.trim(),
-    returnMark:   $('#m_returnMark').value || null,
     status:       $('#m_status').value,
+    returnMark:   $('#m_returnMark').value || null,
     signCert:     $('#m_signCert').value.trim(),
     signCarrier:  $('#m_signCarrier').value.trim(),
     twoFactor:    $('#m_twoFactor').checked,
   };
   if(!rec.employee){ toast('Укажите ФИО','error'); return; }
   try{
-    if(editCarrierId){
-      await API.updCarrier(editCarrierId, rec);
-    }else{
-      await API.addCarrier(rec);
-    }
-    closeModal(); toast('Сохранено','ok');
-    await loadAndDraw();
+    if(editCarrierId) await API.updCarrier(editCarrierId, rec);
+    else              await API.addCarrier(rec);
+    closeModal(); toast('Сохранено','ok'); await loadAndDraw();
   }catch(ex){ toast(ex.message,'error'); }
 }
 
-function closeModal(){ $('#backdrop').classList.remove('open'); editCarrierId=null; }
+/* ============================================================
+   МОДАЛКА СЕРТИФИКАТА
+   ============================================================ */
+let editCertId = null;
+function openCertModal(carrierId, cert){
+  editCertId = cert ? cert.id : null;
+  const carrier = journalData.find(r=>r.id===carrierId);
+  const typeOpts = certTypes.length
+    ? certTypes
+    : [{code:1,name:'2FA',title:'Двухфакторная аутентификация',default_valid_years:2},
+       {code:2,name:'ЦОД',title:'Система ЦОД',default_valid_years:2},
+       {code:3,name:'Оператор',title:'Оператор выпуска',default_valid_years:1},
+       {code:4,name:'Лок.Админ',title:'Локальный  Админ',default_valid_years:1}];
+
+  $('#modalTitle').textContent = cert
+    ? `Сертификат на ${carrier?.carrierSerial||''}`
+    : `Новый сертификат на ${carrier?.carrierSerial||''}`;
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label>Тип сертификата
+        <select id="c_type">
+          ${typeOpts.map(t=>`
+            <option value="${t.code}" ${cert?.certType==t.code?'selected':''}>
+              ${t.code} — ${esc(t.name)} (${t.default_valid_years} г.)
+            </option>`).join('')}
+        </select>
+      </label>
+      <label>Серийный номер<input id="c_serial" value="${esc(cert?.serialNumber)}"></label>
+      <label>Дата выпуска<input type="date" id="c_from" value="${cert?.validFrom || todayISO()}"></label>
+      <label>Действует до (пусто = расчёт по типу)
+        <input type="date" id="c_to" value="${cert?.validTo || ''}">
+      </label>
+      <label>Статус
+        <select id="c_status">
+          ${['active','revoked','reserved'].map(s=>
+            `<option value="${s}" ${cert?.status===s?'selected':''}>${
+              {active:'Активен',revoked:'Отозван',reserved:'Резерв'}[s]
+            }</option>`).join('')}
+        </select>
+      </label>
+      <label class="full">Примечание<textarea id="c_note" rows="2">${esc(cert?.note)}</textarea></label>
+    </div>`;
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="cCancel">Отмена</button>
+    <button class="btn primary" id="cSave">Сохранить</button>`;
+  $('#cCancel').onclick = closeModal;
+  $('#cSave').onclick = async ()=>{
+    const rec = {
+      carrierId,
+      certType:     +$('#c_type').value,
+      serialNumber: $('#c_serial').value.trim(),
+      validFrom:    $('#c_from').value,
+      validTo:      $('#c_to').value || null,
+      status:       $('#c_status').value,
+      note:         $('#c_note').value.trim(),
+    };
+    if(!rec.validFrom){ toast('Укажите дату выпуска','error'); return; }
+    try{
+      if(editCertId) await API.updCert(editCertId, rec);
+      else           await API.addCert(rec);
+      closeModal(); toast('Сохранено','ok'); await loadAndDraw();
+    }catch(ex){ toast(ex.message,'error'); }
+  };
+  $('#backdrop').classList.add('open');
+}
+
+function closeModal(){ $('#backdrop').classList.remove('open'); editCarrierId=null; editCertId=null; }
 $('#backdrop').addEventListener('click',e=>{ if(e.target.id==='backdrop') closeModal(); });
 
 /* ============================================================
-   ИМПОРТ EXCEL (SheetJS → POST /api/carriers/bulk)
+   ИМПОРТ EXCEL → POST /api/carriers/bulk
    ============================================================ */
 async function importExcel(e){
   const f = e.target.files[0]; if(!f) return;
@@ -737,25 +835,25 @@ async function importExcel(e){
         const employee = String(r['ФИО, должность и подразделение сотрудника']||'').trim();
         if(!employee) continue;
         const parts = employee.split(',').map(s=>s.trim());
+        const serial = String(r['Номер, серия ключевого носителя']||'').trim()
+          .replace(/С/g,'C');
         payload.push({
           issueDate:    toISO(r['дата выдачи']),
           carrierType:  String(r['Вид ключевого носителя']||'').trim(),
-          carrierSerial:String(r['Номер, серия ключевого носителя']||'').trim(),
+          carrierSerial:serial,
           employee:     parts[0]||employee,
           position:     parts[1]||'',
           department:   parts[2]||'',
-          certType:     +(r['Вид сертификата *']||1),
-          certStart:    toISO(r['Период действия сертификата']),
-          certSerial:   String(r['Серийный номер сертификата']||'').trim(),
-          status:       r['Отметка о возврате ключевого носителя']?'returned':'active',
+          certificates: [{
+            certType: +(r['Вид сертификата *']||1),
+            validFrom:toISO(r['Период действия сертификата']),
+            serialNumber: String(r['Серийный номер сертификата']||'').trim(),
+            status:       r['Отметка о возврате ключевого носителя']?'revoked':'active',
+          }]
         });
       }
 
-      if(!payload.length){
-        toast('Нет валидных строк для импорта','error');
-        return;
-      }
-
+      if(!payload.length){ toast('Нет валидных строк','error'); return; }
       const { added } = await API.req('POST','/api/carriers/bulk', payload);
       toast(`Импортировано: ${added} из ${payload.length}`,'ok');
       await loadAndDraw();
@@ -774,248 +872,238 @@ function toISO(v){
 }
 
 /* ============================================================
-   ЭКСПОРТ CSV (из уже загруженных journalData)
+   ЭКСПОРТ CSV, ПЕЧАТЬ, ДАШБОРД, ТИПЫ, ПОЛЬЗОВАТЕЛИ, АУДИТ
    ============================================================ */
 function exportCsv(){
-  const rows = getSorted();
-  const cols = ['ppp','issueDate','carrierType','carrierSerial','employee',
-    'position','department','certType','certStart','certSerial','returnMark',
-    'status','signCert','signCarrier','twoFactor'];
-  const head = cols.join(';');
-  const body = rows.map(r=>cols.map(c=>String(r[c]??'').replace(/;/g,',')).join(';'));
-  const csv = '\uFEFF'+[head,...body].join('\n');
+  const rows = journalData;
+  const head = ['№','Носитель','Серийный №','ФИО','Должность','Подразделение','Сертификаты'];
+  const body = rows.map(r=>{
+    const certs = (r.certificates||[]).map(c=>`${c.typeName}: ${c.validFrom} - ${c.validTo}`).join(' | ');
+    return [r.ppp||'', r.carrierType||'', r.carrierSerial||'', r.employee||'', r.position||'', r.department||'', certs].map(v=>String(v).replace(/;/g,',')).join(';');
+  });
+  const csv = '\uFEFF'+[head.join(';'), ...body].join('\n');
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `journal_${todayISO()}.csv`; a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `journal_${todayISO()}.csv`; a.click();
 }
 
-/* ============================================================
-   ПЕЧАТЬ
-   ============================================================ */
 function printAct(r){
-  const end = endDate(r.certStart);
+  // Формируем строки для каждого сертификата сотрудника
+  const certRows = (r.certificates||[]).map(c => {
+    const dl = daysLeftOfCert(c);
+    let statusText = 'Действителен';
+    if (dl !== null && dl < 0) statusText = 'Истёк';
+    if (c.status === 'revoked') statusText = 'Отозван';
+    
+    return `<tr>
+      <td>${esc(c.typeName || c.certType || '')}</td>
+      <td>${esc(c.serialNumber || '—')}</td>
+      <td>${fmtDate(c.validFrom)}</td>
+      <td>${fmtDate(c.validTo)}</td>
+      <td style="text-align:center;">${statusText}</td>
+    </tr>`;
+  }).join('');
+
   $('#printArea').innerHTML = `
     <div class="act">
-      <h1>АКТ приёма-передачи ключевого носителя</h1>
-      <p><b>Дата выдачи:</b> ${fmtDate(r.issueDate)}</p>
-      <table>
-        <tr><th>ФИО</th><td>${esc(r.employee)}</td></tr>
-        <tr><th>Должность</th><td>${esc(r.position)}</td></tr>
-        <tr><th>Подразделение</th><td>${esc(r.department)}</td></tr>
-        <tr><th>Вид носителя</th><td>${esc(r.carrierType)}</td></tr>
-        <tr><th>Серия/номер</th><td>${esc(r.carrierSerial)}</td></tr>
-        <tr><th>Вид сертификата</th><td>${r.certType}</td></tr>
-        <tr><th>Серийный номер сертификата</th><td>${esc(r.certSerial)}</td></tr>
-        <tr><th>Период действия</th><td>${fmtDate(r.certStart)} — ${fmtDate(end)}</td></tr>
+      <h1>Акт приёма-передачи ключевого носителя</h1>
+      <p style="text-align: right; margin-bottom: 20px;">Дата формирования: ${new Date().toLocaleDateString('ru-RU')}</p>
+      
+      <table style="margin-bottom: 20px;">
+        <tr><th style="width: 30%;">ФИО сотрудника</th><td><b>${esc(r.employee)}</b></td></tr>
+        <tr><th>Должность</th><td>${esc(r.position || '—')}</td></tr>
+        <tr><th>Подразделение</th><td>${esc(r.department || '—')}</td></tr>
+        <tr><th>Вид носителя</th><td>${esc(r.carrierType || '—')}</td></tr>
+        <tr><th>Серия / номер</th><td><b>${esc(r.carrierSerial || '—')}</b></td></tr>
+        <tr><th>Дата выдачи носителя</th><td>${fmtDate(r.issueDate)}</td></tr>
       </table>
+
+      <p style="margin-bottom: 5px;"><b>Сертификаты, записанные на носитель:</b></p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 25%;">Тип сертификата</th>
+            <th style="width: 25%;">Серийный номер</th>
+            <th style="width: 15%;">Дата выпуска</th>
+            <th style="width: 15%;">Действует до</th>
+            <th style="width: 20%;">Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${certRows || '<tr><td colspan="5" style="text-align:center;">Нет привязанных сертификатов</td></tr>'}
+        </tbody>
+      </table>
+
+      <p style="margin-top: 20px;">Ключевой носитель и перечисленные выше сертификаты переданы сотруднику в исправном состоянии. С правилами эксплуатации ознакомлен.</p>
+
       <div class="sign">
-        <div>Выдал: ${esc(session.fullName)}</div>
-        <div>Принял: ${esc(r.employee)}</div>
+        <div>Выдал: ${esc(session.fullName)}<br><br><br></div>
+        <div>Принял: ${esc(r.employee)}<br><br><br></div>
       </div>
     </div>`;
+  
   window.print();
 }
+
 function printJournal(){
-  const rows = getSorted();
+  const rows = journalData;
   $('#printArea').innerHTML = `
     <div class="act">
       <h1>Журнал учёта ключевых носителей</h1>
       <p>Дата печати: ${new Date().toLocaleString('ru-RU')}</p>
       <table>
-        <thead><tr><th>№</th><th>Дата</th><th>Носитель</th><th>Серия</th>
-        <th>ФИО</th><th>Подразделение</th><th>Серт.</th><th>До</th><th>Статус</th></tr></thead>
-        <tbody>${rows.map(r=>`<tr>
-          <td>${r.ppp??''}</td><td>${fmtDate(r.issueDate)}</td>
-          <td>${esc(r.carrierType)}</td><td>${esc(r.carrierSerial)}</td>
-          <td>${esc(r.employee)}</td><td>${esc(r.department)}</td>
-          <td>${r.certType??''}</td><td>${fmtDate(endDate(r.certStart))}</td>
-          <td>${statusOf(r)}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>№</th><th>Дата</th><th>Носитель</th><th>Серийник</th><th>ФИО</th><th>Сертификаты</th></tr></thead>
+        <tbody>${rows.map(r=>{
+          const certs = (r.certificates||[]).map(c=>`${c.typeName}: ${fmtDate(c.validFrom)} - ${fmtDate(c.validTo)}`).join('<br>');
+          return `<tr><td>${r.ppp??''}</td><td>${fmtDate(r.issueDate)}</td><td>${esc(r.carrierType)}</td><td>${esc(r.carrierSerial)}</td><td>${esc(r.employee)}</td><td>${certs}</td></tr>`;
+        }).join('')}</tbody>
       </table>
     </div>`;
   window.print();
 }
 
-/* ============================================================
-   ДАШБОРД (по данным API)
-   ============================================================ */
 async function renderDashboard(){
-  let all;
-  try{ all = (await API.carriers()).map(normCarrier); }
-  catch(ex){ toast(ex.message,'error'); return; }
-  const stats = {total:all.length,active:0,expired:0,soon30:0,soon60:0,soon90:0};
-  all.forEach(r=>{
-    const st = statusOf(r);
-    if(st==='active') stats.active++;
-    if(st==='expired') stats.expired++;
-    const dl = daysLeft(endDate(r.certStart));
-    if(dl!==null && dl>=0){
-      if(dl<=30) stats.soon30++;
-      if(dl<=60) stats.soon60++;
-      if(dl<=90) stats.soon90++;
-    }
-  });
-  const byCarrier = {};
-  all.forEach(r=>{ byCarrier[r.carrierType||'—'] = (byCarrier[r.carrierType||'—']||0)+1; });
-  const expiring = all.filter(r=>{
-    const dl = daysLeft(endDate(r.certStart));
-    return dl!==null && dl>=0 && dl<=90;
-  }).sort((a,b)=> daysLeft(endDate(a.certStart))-daysLeft(endDate(b.certStart)));
-
+  let certs, carriers;
+  try{ certs = await API.certs(); carriers = await API.carriers(); }catch(ex){ toast(ex.message,'error'); return; }
+  const byType = {};
+  for(const c of certs){ const t = c.type_name || String(c.cert_type); byType[t] ||= {total:0,expiring30:0,expiring60:0,expiring90:0,expired:0}; byType[t].total++; if(c.valid_to){ const dl = daysBetween(c.valid_to.slice(0,10)); if(dl<0) byType[t].expired++; else { if(dl<=30) byType[t].expiring30++; if(dl<=60) byType[t].expiring60++; if(dl<=90) byType[t].expiring90++; } } }
+  const totalExpired = Object.values(byType).reduce((s,x)=>s+x.expired,0);
+  const total30 = Object.values(byType).reduce((s,x)=>s+x.expiring30,0);
+  const expiringList = certs.filter(c=>{ if(!c.valid_to) return false; const dl = daysBetween(c.valid_to.slice(0,10)); return dl!=null && dl>=0 && dl<=90; }).sort((a,b)=> new Date(a.valid_to)-new Date(b.valid_to));
+  
   $('#content').innerHTML = `
     <div class="cards">
-      <div class="card"><div class="label">Всего записей</div><div class="value">${stats.total}</div></div>
-      <div class="card ok"><div class="label">Активных</div><div class="value">${stats.active}</div></div>
-      <div class="card danger"><div class="label">Просрочено</div><div class="value">${stats.expired}</div></div>
-      <div class="card warn"><div class="label">Истекает ≤30 дн.</div><div class="value">${stats.soon30}</div></div>
-      <div class="card warn"><div class="label">≤60 дн.</div><div class="value">${stats.soon60}</div></div>
-      <div class="card warn"><div class="label">≤90 дн.</div><div class="value">${stats.soon90}</div></div>
+      <div class="card"><div class="label">Носителей</div><div class="value">${carriers.length}</div></div>
+      <div class="card"><div class="label">Сертификатов</div><div class="value">${certs.length}</div></div>
+      <div class="card danger"><div class="label">Истекло</div><div class="value">${totalExpired}</div></div>
+      <div class="card warn"><div class="label">Истекает ≤30 дн.</div><div class="value">${total30}</div></div>
     </div>
-    <h3 style="margin:16px 0 8px">По типам носителей</h3>
+    <h3 style="margin:16px 0 8px">По типам сертификатов</h3>
     <div class="cards">
-      ${Object.entries(byCarrier).map(([k,v])=>
-        `<div class="card"><div class="label">${esc(k)}</div><div class="value">${v}</div></div>`).join('')}
+      ${Object.entries(byType).map(([t,s])=>`
+        <div class="card ${s.expiring30?'warn':s.expired?'danger':''}">
+          <div class="label">${esc(t)}</div>
+          <div class="value">${s.total}</div>
+          <div class="sub">≤30: ${s.expiring30} · ≤60: ${s.expiring60} · ≤90: ${s.expiring90}<br>истекло: ${s.expired}</div>
+        </div>`).join('')}
     </div>
-    <h3 style="margin:16px 0 8px">Истекают в ближайшие 90 дней (${expiring.length})</h3>
+    <h3 style="margin:16px 0 8px">Истекают в ближайшие 90 дней (${expiringList.length})</h3>
     <div class="table-wrap"><table>
-      <thead><tr><th>№</th><th>ФИО</th><th>Носитель</th><th>Окончание</th><th>Осталось</th><th>Статус</th></tr></thead>
-      <tbody>${expiring.slice(0,50).map(r=>{
-        const dl = daysLeft(endDate(r.certStart));
-        return `<tr>
-          <td>${r.ppp??''}</td><td>${esc(r.employee)}</td>
-          <td>${esc(r.carrierType)}</td><td>${fmtDate(endDate(r.certStart))}</td>
-          <td class="${dl<60?'exp-warn':''}">${dl} дн.</td>
-          <td>${statusBadge(statusOf(r))}</td></tr>`;
-      }).join('') || `<tr><td colspan="6" class="empty">Нет</td></tr>`}</tbody>
+      <thead><tr><th>ФИО</th><th>Носитель</th><th>Тип</th><th>Серийник</th><th>Действует до</th><th>Осталось</th></tr></thead>
+      <tbody>${expiringList.slice(0,100).map(c=>{
+        const dl = daysBetween(c.valid_to.slice(0,10));
+        return `<tr><td>${esc(c.employee||'')}</td><td>${esc(c.carrier_serial||'')}</td><td>${esc(c.type_name||'')}</td><td>${esc(c.serial_number||'')}</td><td>${fmtDate(c.valid_to)}</td><td class="${dl<60?'exp-warn':''}">${dl} дн.</td></tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty">Нет</td></tr>'}</tbody>
     </table></div>`;
 }
 
-/* ============================================================
-   ПОЛЬЗОВАТЕЛИ (admin)
-   ============================================================ */
-async function renderUsers(){
-  let users;
-  try{ users = (await API.users()).map(normUser); }
-  catch(ex){ toast(ex.message,'error'); return; }
+async function renderTypes(){
+  let list;
+  try{ list = await API.certTypes(); }catch(ex){ toast(ex.message,'error'); return; }
   $('#content').innerHTML = `
     <div class="table-wrap"><table>
-      <thead><tr><th>Логин</th><th>ФИО</th><th>Роль</th><th>Активен</th>
-      <th>Создан</th><th>Последний вход</th><th></th></tr></thead>
+      <thead><tr><th>Код</th><th>Имя</th><th>Название</th><th>Срок, лет</th><th>Описание</th><th></th></tr></thead>
+      <tbody>${list.map(t=>`<tr>
+        <td class="num"><b>${t.code}</b></td><td>${esc(t.name)}</td><td>${esc(t.title)}</td>
+        <td class="num">${t.default_valid_years}</td><td>${esc(t.description)}</td>
+        <td><button class="btn sm" data-act="edit" data-id="${t.code}">✏️</button><button class="btn sm danger" data-act="del" data-id="${t.code}">🗑</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <p style="color:var(--muted);margin-top:12px;font-size:12px">Код типа соответствует колонке «Вид сертификата» в Excel. Срок по умолчанию используется, когда при создании сертификата не указана дата «Действует до».</p>`;
+  $('#content').onclick = async e=>{
+    const b = e.target.closest('button[data-act]'); if(!b) return;
+    const code = +b.dataset.id; const t = list.find(x=>x.code===code);
+    if(b.dataset.act==='edit') openTypeModal(t);
+    if(b.dataset.act==='del'){
+      if(!confirm(`Удалить тип ${t.name}?`)) return;
+      try{ await API.delCertType(code); await renderTypes(); toast('Тип удален','ok'); }catch(ex){ toast(ex.message,'error'); }
+    }
+  };
+}
+
+let editTypeCode = null;
+function openTypeModal(t){
+  editTypeCode = t ? t.code : null;
+  $('#modalTitle').textContent = t ? 'Редактировать тип' : 'Новый тип';
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label>Код (число)<input type="number" id="t_code" value="${t?.code||''}" ${t?'disabled':''}></label>
+      <label>Имя (короткое)<input id="t_name" value="${esc(t?.name)}"></label>
+      <label>Название (полное)<input id="t_title" value="${esc(t?.title)}"></label>
+      <label>Срок действия (лет)<input type="number" id="t_years" value="${t?.default_valid_years||2}"></label>
+      <label class="full">Описание<textarea id="t_desc" rows="2">${esc(t?.description)}</textarea></label>
+    </div>`;
+  $('#modalFooter').innerHTML = `<button class="btn" id="tCancel">Отмена</button><button class="btn primary" id="tSave">Сохранить</button>`;
+  $('#tCancel').onclick = closeModal;
+  $('#tSave').onclick = async ()=>{
+    const rec = { code: +$('#t_code').value, name: $('#t_name').value.trim(), title: $('#t_title').value.trim(), default_valid_years: +$('#t_years').value, description: $('#t_desc').value.trim() };
+    if(!rec.code || !rec.name || !rec.title){ toast('Заполните код, имя и название','error'); return; }
+    try{
+      if(editTypeCode) await API.updCertType(editTypeCode, rec); else await API.addCertType(rec);
+      closeModal(); await renderTypes(); toast('Сохранено','ok');
+    }catch(ex){ toast(ex.message,'error'); }
+  };
+  $('#backdrop').classList.add('open');
+}
+
+async function renderUsers(){
+  let users;
+  try{ users = (await API.users()).map(normUser); }catch(ex){ toast(ex.message,'error'); return; }
+  $('#content').innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Логин</th><th>ФИО</th><th>Роль</th><th>Активен</th><th>Создан</th><th>Последний вход</th><th></th></tr></thead>
       <tbody>${users.map(u=>`<tr>
-        <td><b>${esc(u.login)}</b></td>
-        <td>${esc(u.fullName)}</td>
-        <td>${esc(u.role)}</td>
-        <td>${u.active?'✅':'⛔'}</td>
-        <td>${fmtDate(u.created)}</td>
-        <td>${u.lastLogin?new Date(u.lastLogin).toLocaleString('ru-RU'):'—'}</td>
+        <td><b>${esc(u.login)}</b></td><td>${esc(u.fullName)}</td><td>${esc(u.role)}</td><td>${u.active?'✅':'⛔'}</td>
+        <td>${fmtDate(u.created)}</td><td>${u.lastLogin?new Date(u.lastLogin).toLocaleString('ru-RU'):'—'}</td>
         <td>
           <button class="btn sm" data-act="edit" data-id="${u.id}">✏️</button>
           <button class="btn sm" data-act="reset" data-id="${u.id}">🔑</button>
-          <button class="btn sm" data-act="toggle" data-id="${u.id}"
-            ${u.id===session.id?'disabled':''}>${u.active?'⛔':'✅'}</button>
-          <button class="btn sm danger" data-act="del" data-id="${u.id}"
-            ${u.id===session.id?'disabled':''}>🗑</button>
+          <button class="btn sm" data-act="toggle" data-id="${u.id}" ${u.id===session.id?'disabled':''}>${u.active?'⛔':'✅'}</button>
+          <button class="btn sm danger" data-act="del" data-id="${u.id}" ${u.id===session.id?'disabled':''}>🗑</button>
         </td></tr>`).join('')}</tbody>
     </table></div>`;
-
   $('#content').onclick = async e=>{
     const b = e.target.closest('button[data-act]'); if(!b) return;
-    const id = b.dataset.id;
-    const u = users.find(x=>x.id===id);
-    if(!u) return;
+    const id = b.dataset.id; const u = users.find(x=>x.id===id); if(!u) return;
     if(b.dataset.act==='edit') openUserModal(u);
-    if(b.dataset.act==='reset'){
-      const np = prompt(`Новый пароль для ${u.login} (≥6 символов):`);
-      if(!np) return;
-      try{
-        await API.updUser(id,{password:np});
-        toast('Пароль сброшен','ok');
-      }catch(ex){ toast(ex.message,'error'); }
-    }
-    if(b.dataset.act==='toggle'){
-      try{
-        await API.updUser(id,{active:!u.active});
-        await renderUsers();
-      }catch(ex){ toast(ex.message,'error'); }
-    }
-    if(b.dataset.act==='del'){
-      if(!confirm(`Удалить пользователя ${u.login}?`)) return;
-      try{
-        await API.delUser(id);
-        await renderUsers(); toast('Удалён','ok');
-      }catch(ex){ toast(ex.message,'error'); }
-    }
+    if(b.dataset.act==='reset'){ const np = prompt(`Новый пароль для ${u.login} (≥6):`); if(!np) return; try{ await API.updUser(id,{password:np}); toast('Пароль сброшен','ok'); }catch(ex){ toast(ex.message,'error'); } }
+    if(b.dataset.act==='toggle'){ try{ await API.updUser(id,{active:!u.active}); await renderUsers(); }catch(ex){ toast(ex.message,'error'); } }
+    if(b.dataset.act==='del'){ if(!confirm(`Удалить ${u.login}?`)) return; try{ await API.delUser(id); await renderUsers(); toast('Удалён','ok'); }catch(ex){ toast(ex.message,'error'); } }
   };
 }
 
 let editUserId = null;
 function openUserModal(u){
   editUserId = u?u.id:null;
-  $('#modalTitle').textContent = u?'Редактирование пользователя':'Новый пользователь';
+  $('#modalTitle').textContent = u?'Пользователь':'Новый пользователь';
   $('#modalBody').innerHTML = `
     <div class="form">
       <label>Логин<input id="u_login" value="${esc(u?.login)}" ${u?'disabled':''}></label>
       <label>ФИО<input id="u_fullName" value="${esc(u?.fullName)}"></label>
-      <label>Роль
-        <select id="u_role">
-          ${['admin','operator','auditor'].map(r=>
-            `<option ${u?.role===r?'selected':''}>${r}</option>`).join('')}
-        </select>
-      </label>
+      <label>Роль<select id="u_role">${['admin','operator','auditor'].map(r=>`<option ${u?.role===r?'selected':''}>${r}</option>`).join('')}</select></label>
       <label>${u?'Новый пароль (пусто — не менять)':'Пароль'}</label>
-      <input id="u_password" type="password" style="grid-column:1/-1"
-        placeholder="≥6 символов">
+      <input id="u_password" type="password" style="grid-column:1/-1" placeholder="≥6 символов">
     </div>`;
-  $('#modalFooter').innerHTML = `
-    <button class="btn" id="muCancel">Отмена</button>
-    <button class="btn primary" id="muSave">Сохранить</button>`;
+  $('#modalFooter').innerHTML = `<button class="btn" id="muCancel">Отмена</button><button class="btn primary" id="muSave">Сохранить</button>`;
   $('#muCancel').onclick = closeModal;
   $('#muSave').onclick = async ()=>{
     try{
-      const login = $('#u_login').value.trim();
-      const fullName = $('#u_fullName').value.trim();
-      const role = $('#u_role').value;
-      const password = $('#u_password').value;
-      if(editUserId){
-        const patch = { fullName, role };
-        if(password) patch.password = password;
-        await API.updUser(editUserId, patch);
-      }else{
-        if(!login) throw new Error('Укажите логин');
-        await API.addUser({ login, fullName, role, password });
-      }
+      const login = $('#u_login').value.trim(), fullName = $('#u_fullName').value.trim(), role = $('#u_role').value, password = $('#u_password').value;
+      if(editUserId){ const patch = {fullName, role}; if(password) patch.password = password; await API.updUser(editUserId, patch); }
+      else { if(!login) throw new Error('Укажите логин'); await API.addUser({login, fullName, role, password}); }
       closeModal(); await renderUsers(); toast('Сохранено','ok');
     }catch(ex){ toast(ex.message,'error'); }
   };
   $('#backdrop').classList.add('open');
 }
 
-/* ============================================================
-   АУДИТ-ЛОГ
-   ============================================================ */
 async function renderAudit(){
   let items;
-  try{ items = await API.audit(); }
-  catch(ex){ toast(ex.message,'error'); return; }
-  $('#content').innerHTML = `
-    <div class="table-wrap"><div>
-      ${items.length? items.map(a=>`
-        <div class="log-item">
-          <span class="time">${new Date(a.ts).toLocaleString('ru-RU')}</span>
-          <span class="who">${esc(a.user_name||'—')}</span>
-          <span class="what"><b>${esc(a.action)}</b> · ${esc(a.entity)}
-            ${a.entity_id?`<code style="font-size:11px">${esc(a.entity_id)}</code>`:''}
-            ${a.details?`<details><summary>детали</summary><pre>${esc(JSON.stringify(a.details,null,2))}</pre></details>`:''}
-          </span>
-        </div>`).join('') : '<div class="empty">Пока пусто</div>'}
-    </div></div>`;
+  try{ items = await API.audit(); }catch(ex){ toast(ex.message,'error'); return; }
+  $('#content').innerHTML = `<div class="table-wrap"><div>${items.length? items.map(a=>`<div class="log-item"><span class="time">${new Date(a.ts).toLocaleString('ru-RU')}</span><span class="who">${esc(a.user_name||'—')}</span><span class="what"><b>${esc(a.action)}</b> · ${esc(a.entity)}${a.entity_id?`<code style="font-size:11px">${esc(a.entity_id)}</code>`:''}${a.details?`<details><summary>детали</summary><pre>${esc(JSON.stringify(a.details,null,2))}</pre></details>`:''}</span></div>`).join('') : '<div class="empty">Пока пусто</div>'}</div></div>`;
 }
 
-/* ============================================================
-   ПРОФИЛЬ
-   ============================================================ */
 async function renderProfile(){
-  const me = session; // уже есть
+  const me = session;
   $('#content').innerHTML = `
     <div class="card" style="max-width:520px">
       <div class="label">Логин</div><div style="font-size:16px;font-weight:600">${esc(me.login)}</div>
@@ -1023,45 +1111,110 @@ async function renderProfile(){
       <div class="label" style="margin-top:12px">Роль</div><div>${esc(me.role)}</div>
       <hr style="margin:20px 0;border:0;border-top:1px solid var(--line)">
       <h3 style="margin:0 0 12px">Смена пароля</h3>
-      <label style="display:block;margin-bottom:8px;font-size:12px;color:var(--muted)">
-        Текущий пароль<input id="p_old" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px">
-      </label>
-      <label style="display:block;margin-bottom:8px;font-size:12px;color:var(--muted)">
-        Новый пароль<input id="p_new" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px">
-      </label>
-      <label style="display:block;margin-bottom:12px;font-size:12px;color:var(--muted)">
-        Повторите новый<input id="p_new2" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px">
-      </label>
+      <label style="display:block;margin-bottom:8px;font-size:12px;color:var(--muted)">Текущий пароль<input id="p_old" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px"></label>
+      <label style="display:block;margin-bottom:8px;font-size:12px;color:var(--muted)">Новый пароль<input id="p_new" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px"></label>
+      <label style="display:block;margin-bottom:12px;font-size:12px;color:var(--muted)">Повторите<input id="p_new2" type="password" style="width:100%;padding:8px;margin-top:4px;border:1px solid var(--line);border-radius:8px"></label>
       <button class="btn primary" id="p_save">Изменить пароль</button>
     </div>`;
   $('#p_save').onclick = async ()=>{
     const oldP = $('#p_old').value, np = $('#p_new').value, np2 = $('#p_new2').value;
     if(np!==np2){ toast('Пароли не совпадают','error'); return; }
-    try{
-      await API.changePassword(oldP, np);
-      toast('Пароль изменён','ok');
-      $('#p_old').value=$('#p_new').value=$('#p_new2').value='';
-    }catch(ex){ toast(ex.message,'error'); }
+    try{ await API.changePassword(oldP, np); toast('Пароль изменён','ok'); $('#p_old').value=$('#p_new').value=$('#p_new2').value=''; }
+    catch(ex){ toast(ex.message,'error'); }
   };
 }
 
-/* ============================================================
-   УТИЛИТА debounce
-   ============================================================ */
-function debounce(fn,ms){
-  let t;
-  return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); };
+async function renderEmployees(){
+  let list;
+  try { list = await API.employees(); } catch(ex) { toast(ex.message, 'error'); return; }
+  
+  $('#content').innerHTML = `
+    <div class="toolbar">
+      <input id="emp_q" placeholder="Поиск по ФИО...">
+      <span class="spacer"></span>
+      <button class="btn primary" id="btnAddEmp">➕ Добавить сотрудника</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ФИО</th>
+            <th>Должность</th>
+            <th>Подразделение</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody id="emp_tbody">
+          ${list.map(e => `
+            <tr>
+              <td><b>${esc(e.full_name)}</b></td>
+              <td>${esc(e.position || '—')}</td>
+              <td>${esc(e.department || '—')}</td>
+              <td>
+                <button class="btn sm" data-act="edit" data-id="${e.id}">✏️</button>
+                <button class="btn sm danger" data-act="del" data-id="${e.id}">🗑</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Поиск по клиенту (простой фильтр)
+  $('#emp_q').oninput = (e) => {
+    const val = e.target.value.toLowerCase();
+    $$('#emp_tbody tr').forEach(tr => {
+      tr.style.display = tr.textContent.toLowerCase().includes(val) ? '' : 'none';
+    });
+  };
+
+  $('#btnAddEmp').onclick = () => openEmployeeModal(null);
+  $('#emp_tbody').onclick = (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const emp = list.find(x => x.id === id);
+    if(btn.dataset.act === 'edit') openEmployeeModal(emp);
+    if(btn.dataset.act === 'del') {
+      if(confirm(`Удалить ${emp.full_name} из базы?`)) {
+        API.delEmployee(id).then(() => renderEmployees());
+      }
+    }
+  };
 }
 
-/* ============================================================
-   СТАРТ
-   ============================================================ */
+let editEmpId = null;
+function openEmployeeModal(emp) {
+  editEmpId = emp ? emp.id : null;
+  $('#modalTitle').textContent = emp ? 'Редактировать сотрудника' : 'Новый сотрудник';
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label class="full">ФИО сотрудника<input id="e_name" value="${esc(emp?.full_name)}" required></label>
+      <label>Должность<input id="e_pos" value="${esc(emp?.position)}"></label>
+      <label>Подразделение<input id="e_dept" value="${esc(emp?.department)}"></label>
+    </div>`;
+  $('#modalFooter').innerHTML = `<button class="btn" id="eCancel">Отмена</button><button class="btn primary" id="eSave">Сохранить</button>`;
+  
+  $('#eCancel').onclick = closeModal;
+  $('#eSave').onclick = async () => {
+    const rec = {
+      full_name: $('#e_name').value.trim(),
+      position: $('#e_pos').value.trim(),
+      department: $('#e_dept').value.trim()
+    };
+    if(!rec.full_name) { toast('Укажите ФИО', 'error'); return; }
+    try {
+      if(editEmpId) await API.updEmployee(editEmpId, rec);
+      else await API.addEmployee(rec);
+      closeModal(); renderEmployees(); toast('Сохранено', 'ok');
+    } catch(ex) { toast(ex.message, 'error'); }
+  };
+  $('#backdrop').classList.add('open');
+}
+
 (async function start(){
-  if(await tryAutoLogin()){
-    showApp(); bootApp();
-  }else{
-    showLogin();
-  }
+  if(await tryAutoLogin()){ showApp(); bootApp(); } else { showLogin(); }
 })();
 </script>
 </body>
