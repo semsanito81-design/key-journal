@@ -7,5 +7,6 @@ node_modules/
 .env.example
 
 # Логи и временные файлы
+*.sql
 *.log
 tmp/
