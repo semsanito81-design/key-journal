@@ -34,19 +34,27 @@ input,select,textarea{font:inherit}
 .login-err{color:var(--danger);font-size:13px;min-height:18px;margin-bottom:8px}
 
 /* LAYOUT */
-#app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+html, body { height: 100%; overflow: hidden; } /* 1. Запрещаем скролл всей страницы */
+
+#app{display:grid;grid-template-columns:230px 1fr;height:100vh} /* 2. Меняем min-height на height */
+
 .sidebar{background:var(--sidebar);color:var(--sidebar-text);padding:16px 0;
-  display:flex;flex-direction:column}
+  display:flex;flex-direction:column; height:100vh;} /* 3. Фиксируем высоту меню */
+
 .brand{padding:0 20px 16px;font-weight:700;color:#fff;font-size:15px;
   border-bottom:1px solid #1e293b;margin-bottom:10px}
-.nav{display:flex;flex-direction:column;gap:2px;padding:0 10px}
+  
+.nav{display:flex;flex-direction:column;gap:2px;padding:0 10px; flex:1; overflow-y:auto;} /* 4. Меню занимает свободное место и скроллится само, если надо */
+
 .nav a{padding:9px 12px;border-radius:8px;color:var(--sidebar-text);
   text-decoration:none;font-size:13px;display:flex;gap:8px;align-items:center}
 .nav a:hover{background:#1e293b;color:#fff}
 .nav a.active{background:var(--accent);color:#fff}
 .nav-sep{margin:10px 0;border-top:1px solid #1e293b}
+
 .user-box{margin-top:auto;padding:12px 20px;border-top:1px solid #1e293b;
-  font-size:12px}
+  font-size:12px; background:var(--sidebar);} /* Добавил фон, чтобы не было прозрачности */
+
 .user-box b{color:#fff;display:block;margin-bottom:2px}
 .user-box .role{color:#94a3b8;text-transform:uppercase;font-size:10px;
   letter-spacing:.5px}
@@ -54,11 +62,14 @@ input,select,textarea{font:inherit}
   border:0;padding:7px;border-radius:6px;font-size:12px}
 .user-box button:hover{background:#334155}
 
-.main{display:flex;flex-direction:column;min-width:0}
+.main{display:flex;flex-direction:column;min-width:0; height:100vh; background:var(--bg);} /* 5. Главная область тоже на весь экран и со светлым фоном */
+
 .topbar{background:var(--card);border-bottom:1px solid var(--line);
-  padding:12px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  padding:12px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap; flex-shrink:0;}
+  
 .topbar h2{margin:0;font-size:16px;flex:1 1 auto}
-.content{padding:16px 20px;overflow:auto;flex:1}
+
+.content{padding:16px 20px;overflow-y:auto;flex:1; background:var(--bg);} /* Включаем прокрутку ТОЛЬКО здесь */
 
 /* BUTTONS */
 .btn{border:1px solid var(--line);background:#fff;color:var(--text);
@@ -314,8 +325,16 @@ const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DAY = 86400000;
-const fmtDate = s => { if(!s) return '—'; const d=new Date(s);
-  return isNaN(d)?esc(s):d.toLocaleDateString('ru-RU'); };
+const fmtDate = s => { 
+  if(!s) return '—'; 
+  // Берем первые 10 символов (YYYY-MM-DD) и переставляем местами
+  const str = String(s).slice(0, 10); 
+  const parts = str.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  }
+  return esc(s); 
+};
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 
 function daysBetween(to){ if(!to) return null; return Math.ceil((new Date(to)-new Date())/DAY); }
@@ -353,6 +372,7 @@ function normCarrier(r){
     status: r.status,
     signCert: r.sign_cert,
     signCarrier: r.sign_carrier,
+    signatureData: r.signature_data,
     twoFactor: r.two_factor,
     returnMark: r.return_mark ? r.return_mark.slice(0,10) : '',
     certificates: (r.certificates||[]).map(normCert),
@@ -566,7 +586,7 @@ function drawJournalTable(){
 
   const tb = $('#tbody');
   if(!slice.length){
-    tb.innerHTML = `<tr><td colspan="6" class="empty">Нет записей</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="7" class="empty">Нет записей</td></tr>`;
   }else{
     tb.innerHTML = slice.map(r=>{
       // Рендер сертификатов в столбик
@@ -579,8 +599,15 @@ function drawJournalTable(){
       } else {
         certsHtml = r.certificates.map(c => {
           const type = c.typeName || c.certType;
-          return `<div style="font-size: 12px; margin-bottom: 4px;">
-            <b>${type}</b>: ${fmtDate(c.validFrom)} — ${fmtDate(c.validTo)}
+          
+          // Кнопка редактирования для каждого сертификата
+          const editBtn = can('admin,operator') 
+            ? `<button class="btn sm" style="padding:0 4px; margin-left:8px; font-size:11px; background:none; border:none;" data-act="editCert" data-id="${c.id}" title="Редактировать сертификат">✏️</button>` 
+            : '';
+
+          return `<div style="font-size: 12px; margin-bottom: 4px; display:flex; align-items:center;">
+            <span><b>${type}</b>: ${fmtDate(c.validFrom)} — ${fmtDate(c.validTo)}</span>
+            ${editBtn}
           </div>`;
         }).join('');
 
@@ -730,7 +757,7 @@ async function openCarrierModal(row){
       <div class="full" style="margin-top: 10px;">
         <label style="display:block; margin-bottom:4px; font-size:12px; color:var(--muted);">Подпись сотрудника (при получении)</label>
         <div style="border:1px solid #ccc; border-radius:8px; background:#f8fafc; padding:4px;">
-          <canvas id="signature-pad" style="width:100%; height:150px; touch-action:none; background:#fff; cursor:crosshair; border-radius:4px;"></canvas>
+          <canvas id="signature-pad" style="touch-action:none; background:#fff; cursor:crosshair; border-radius:4px; width: 100%;"></canvas>
         </div>
         <button type="button" class="btn sm" id="clear-signature" style="margin-top:8px;">Очистить подпись</button>
       </div>
@@ -744,27 +771,39 @@ async function openCarrierModal(row){
     }
   };
   
-  // Инициализация Signature Pad
+    // Инициализация Signature Pad
   const canvas = document.getElementById('signature-pad');
   if (canvas) {
-    const signaturePad = new SignaturePad(canvas, {
-      backgroundColor: 'rgba(255, 255, 255, 0)',
-      penColor: 'rgb(0, 0, 0)'
-    });
+    // 1. Даем браузеру время отрисовать модалку
+    setTimeout(() => {
+      // 2. Подгоняем внутреннее разрешение холста под его реальный размер на экране
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width = canvas.offsetWidth * ratio;
+      canvas.height = 150 * ratio; // Фиксированная высота 150px
+      canvas.getContext("2d").scale(ratio, ratio);
+      canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+      canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
 
-    if (row && row.signature_data) {
-       // signaturePad.fromDataURL(row.signature_data); // Если нужно подгружать старую
-    }
+      const signaturePad = new SignaturePad(canvas, {
+        backgroundColor: 'rgba(255, 255, 255, 0)',
+        penColor: 'rgb(29, 78, 216)'
+      });
 
-    document.getElementById('clear-signature').onclick = (e) => {
-      e.preventDefault();
-      signaturePad.clear();
-    };
+      // Если редактируем и подпись есть — загружаем
+      if (row && row.signatureData) {
+         signaturePad.fromDataURL(row.signatureData);
+      }
 
-    window.getSignature = () => {
-      if (signaturePad.isEmpty()) return row?.signature_data || null;
-      return signaturePad.toDataURL('image/png');
-    };
+      document.getElementById('clear-signature').onclick = (e) => {
+        e.preventDefault();
+        signaturePad.clear();
+      };
+
+      window.getSignature = () => {
+        if (signaturePad.isEmpty()) return row?.signatureData || null;
+        return signaturePad.toDataURL('image/png');
+      };
+    }, 100); // Задержка 100мс
   } else {
     window.getSignature = () => null;
   }
@@ -804,15 +843,21 @@ async function saveCarrier(){
    МОДАЛКА СЕРТИФИКАТА
    ============================================================ */
 let editCertId = null;
-function openCertModal(carrierId, cert){
+async function openCertModal(carrierId, cert){
   editCertId = cert ? cert.id : null;
+  
+  // Загружаем свежий справочник типов
+  try {
+    certTypes = await API.certTypes();
+  } catch(e) { console.error("Не удалось обновить справочник"); }
+
   const carrier = journalData.find(r=>r.id===carrierId);
   const typeOpts = certTypes.length
     ? certTypes
     : [{code:1,name:'2FA',title:'Двухфакторная аутентификация',default_valid_years:2},
        {code:2,name:'ЦОД',title:'Система ЦОД',default_valid_years:2},
        {code:3,name:'Оператор',title:'Оператор выпуска',default_valid_years:1},
-       {code:4,name:'Лок.Админ',title:'Локальный  Админ',default_valid_years:1}];
+       {code:4,name:'Лок.Админ',title:'Локальный Админ',default_valid_years:1}];
 
   $('#modalTitle').textContent = cert
     ? `Сертификат на ${carrier?.carrierSerial||''}`
@@ -823,15 +868,15 @@ function openCertModal(carrierId, cert){
         <select id="c_type">
           ${typeOpts.map(t=>`
             <option value="${t.code}" ${cert?.certType==t.code?'selected':''}>
-              ${t.code} — ${esc(t.name)} (${t.default_valid_years} г.)
+              ${t.code} — ${esc(t.name)} (срок ${t.default_valid_years} г.)
             </option>`).join('')}
         </select>
       </label>
       <label>Серийный номер<input id="c_serial" value="${esc(cert?.serialNumber)}"></label>
-      <label>Дата выпуска<input type="date" id="c_from" value="${cert?.validFrom || todayISO()}"></label>
-      <label>Действует до (пусто = расчёт по типу)
-        <input type="date" id="c_to" value="${cert?.validTo || ''}">
-      </label>
+      <label>Дата выпуска<input type="date" id="c_from" value="${cert?.validFrom ? String(cert.validFrom).slice(0,10) : todayISO()}"></label>
+      
+      <label>Действует до (расчет)<input type="text" id="c_to_preview" readonly style="background:#f1f5f9; cursor:not-allowed;"></label>
+      
       <label>Статус
         <select id="c_status">
           ${['active','revoked','reserved'].map(s=>
@@ -845,6 +890,25 @@ function openCertModal(carrierId, cert){
   $('#modalFooter').innerHTML = `
     <button class="btn" id="cCancel">Отмена</button>
     <button class="btn primary" id="cSave">Сохранить</button>`;
+  
+  // Функция предпросмотра даты окончания
+  const updatePreview = () => {
+    const from = $('#c_from').value;
+    const type = +$('#c_type').value;
+    if(!from) { $('#c_to_preview').value = ''; return; }
+    
+    const t = certTypes.find(x => x.code === type) || { default_valid_years: 2 };
+    const parts = from.split('-'); 
+    if (parts.length === 3) {
+      const year = parseInt(parts[0]) + t.default_valid_years;
+      $('#c_to_preview').value = `${parts[2]}.${parts[1]}.${year}`;
+    }
+  };
+
+  updatePreview();
+  $('#c_from').oninput = updatePreview;
+  $('#c_type').onchange = updatePreview;
+
   $('#cCancel').onclick = closeModal;
   $('#cSave').onclick = async ()=>{
     const rec = {
@@ -852,7 +916,6 @@ function openCertModal(carrierId, cert){
       certType:     +$('#c_type').value,
       serialNumber: $('#c_serial').value.trim(),
       validFrom:    $('#c_from').value,
-      validTo:      $('#c_to').value || null,
       status:       $('#c_status').value,
       note:         $('#c_note').value.trim(),
     };
@@ -938,7 +1001,6 @@ function exportCsv(){
 }
 
 function printAct(r){
-  // Формируем строки для каждого сертификата сотрудника
   const certRows = (r.certificates||[]).map(c => {
     const dl = daysLeftOfCert(c);
     let statusText = 'Действителен';
@@ -953,6 +1015,11 @@ function printAct(r){
       <td style="text-align:center;">${statusText}</td>
     </tr>`;
   }).join('');
+
+  // Формируем HTML для подписи (если она есть)
+  const signImg = r.signatureData 
+    ? `<img src="${r.signatureData}" style="max-height: 60px; max-width: 200px; display: block; margin: 0 auto 5px auto;">` 
+    : `<div style="height: 65px;"></div>`; // Пустое место, если подписи нет
 
   $('#printArea').innerHTML = `
     <div class="act">
@@ -971,31 +1038,32 @@ function printAct(r){
       <p style="margin-bottom: 5px;"><b>Сертификаты, записанные на носитель:</b></p>
       <table>
         <thead>
-          <tr>
-            <th style="width: 25%;">Тип сертификата</th>
-            <th style="width: 25%;">Серийный номер</th>
-            <th style="width: 15%;">Дата выпуска</th>
-            <th style="width: 15%;">Действует до</th>
-            <th style="width: 20%;">Статус</th>
-          </tr>
+          <tr><th style="width: 25%;">Тип сертификата</th><th style="width: 25%;">Серийный номер</th><th style="width: 15%;">Дата выпуска</th><th style="width: 15%;">Действует до</th><th style="width: 20%;">Статус</th></tr>
         </thead>
-        <tbody>
-          ${certRows || '<tr><td colspan="5" style="text-align:center;">Нет привязанных сертификатов</td></tr>'}
-        </tbody>
+        <tbody>${certRows || '<tr><td colspan="5" style="text-align:center;">Нет привязанных сертификатов</td></tr>'}</tbody>
       </table>
 
       <p style="margin-top: 20px;">Ключевой носитель и перечисленные выше сертификаты переданы сотруднику в исправном состоянии. С правилами эксплуатации ознакомлен.</p>
 
-      <div class="sign">
-        <div>Выдал: ${esc(session.fullName)}<br><br><br></div>
-        <div>
-          Принял: ${esc(r.employee)}<br><br>
-          ${r.signature_data ? `<img src="${r.signature_data}" style="max-height:60px; max-width:200px; display:block; margin:0 auto;">` : '<br><br>'}
+      <!-- Блок подписей -->
+      <div style="margin-top: 40px; display: flex; justify-content: space-between; page-break-inside: avoid;">
+        <div style="width: 45%;">
+          <div style="height: 65px;"></div>
+          <div style="border-bottom: 1px solid #000;"></div>
+          <div style="text-align: center; font-size: 12px; margin-top: 4px;">Выдал: ${esc(session.fullName)}</div>
+        </div>
+        <div style="width: 45%;">
+          ${signImg}
+          <div style="border-bottom: 1px solid #000;"></div>
+          <div style="text-align: center; font-size: 12px; margin-top: 4px;">Принял: ${esc(r.employee)}</div>
         </div>
       </div>
     </div>`;
   
-  window.print();
+  // Ждем 100 мс, чтобы браузер успел отрисовать картинку, и только потом вызываем печать
+  setTimeout(() => {
+    window.print();
+  }, 100);
 }
 
 function printJournal(){

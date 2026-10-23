@@ -47,21 +47,20 @@ export default async function(app){
   });
 
   // список сертификатов (можно фильтровать)
-  app.get('/', async (req)=>{
+    app.get('/', async (req)=>{
     const { expiring, carrier_id, purpose } = req.query;
     const cond = [], params = [];
     if(carrier_id){ params.push(carrier_id); cond.push(`c.carrier_id=$${params.length}`); }
-    if(purpose){ params.push(purpose); cond.push(`t.name=$${params.length}`); }
+    if(purpose){ params.push(purpose); cond.push(`c.type_name=$${params.length}`); } // тут заменили t.name на c.type_name
     if(expiring){
       params.push(+expiring);
       cond.push(`c.valid_to IS NOT NULL AND c.valid_to <= (CURRENT_DATE + ($${params.length}||' day')::interval)`);
     }
     const where = cond.length ? 'WHERE '+cond.join(' AND ') : '';
     const { rows } = await q(`
-      SELECT c.*, t.name AS type_name, t.title AS type_title,
+      SELECT c.*, 
              cr.carrier_serial, cr.employee, cr.department
-        FROM certificates c
-        JOIN cert_types t  ON t.code = c.cert_type
+        FROM v_certificates c
         JOIN carriers  cr ON cr.id  = c.carrier_id
         ${where}
         ORDER BY c.valid_to NULLS LAST`, params);
@@ -116,21 +115,23 @@ export default async function(app){
     }
   });
 
-  // изменить
-  app.patch('/:id', { preHandler: [requireRole('admin','operator')] }, async (req,reply)=>{
-    const b = req.body||{};
-    // пересчёт valid_to, если поменяли valid_from или тип
-    let validTo = b.validTo;
-    if(b.validFrom && !validTo){
-      const { rows: t } = await q(
-        'SELECT default_valid_years FROM cert_types WHERE code=$1',[b.certType]);
-      if(t[0]){
+  // Изменить сертификат
+  app.patch('/:id', { preHandler: requireRole('admin', 'operator') }, async (req, reply) => {
+    const b = req.body || {};
+    
+    // Если пришла новая дата выпуска, пересчитываем дату окончания на основе типа
+    let validTo = null;
+    if (b.validFrom) {
+      const { rows: t } = await q('SELECT default_valid_years FROM cert_types WHERE code=$1', [b.certType]);
+      if (t[0]) {
         const { rows: v } = await q(
           `SELECT ($1::date + ($2||' year')::interval)::date AS valid_to`,
-          [b.validFrom, t[0].default_valid_years]);
+          [b.validFrom, t[0].default_valid_years]
+        );
         validTo = v[0].valid_to;
       }
     }
+
     const { rows } = await q(`
       UPDATE certificates SET
         cert_type     = COALESCE($1, cert_type),
@@ -141,12 +142,9 @@ export default async function(app){
         note          = COALESCE($6, note),
         updated       = now()
       WHERE id = $7 RETURNING *`,
-      [b.certType, b.serialNumber, b.validFrom, validTo, b.status, b.note,
-       req.params.id]);
+      [b.certType, b.serialNumber, b.validFrom, validTo, b.status, b.note, req.params.id]);
+    
     if(!rows[0]) return reply.code(404).send({error:'Not found'});
-    await q(`INSERT INTO audit(user_id,user_name,action,entity,entity_id,details)
-             VALUES($1,$2,'cert_update','certificate',$3,$4)`,
-            [req.user.id, req.user.fullName, rows[0].id, b]);
     return rows[0];
   });
 

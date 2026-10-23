@@ -22,9 +22,8 @@ export default async function(app){
     if(withParam === 'certificates' && rows.length){
       const ids = rows.map(r=>r.id);
       const { rows: certs } = await q(`
-        SELECT c.*, t.name AS type_name, t.title AS type_title
-          FROM certificates c
-          JOIN cert_types t ON t.code = c.cert_type
+        SELECT c.* 
+          FROM v_certificates c
           WHERE c.carrier_id = ANY($1::uuid[])
           ORDER BY c.cert_type`, [ids]);
       const byCarrier = {};
