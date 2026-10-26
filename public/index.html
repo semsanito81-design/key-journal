@@ -1340,7 +1340,6 @@ async function renderEmployees(){
   };
 
   $('#importEmpFile').onchange = async (e) => {
-    // ИМПОРТ
     const f = e.target.files[0]; if(!f) return;
     const reader = new FileReader();
     reader.onload = async ev => {
@@ -1349,22 +1348,45 @@ async function renderEmployees(){
         const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
         const payload = [];
         
-        // Пропускаем первую строку (заголовки), если она там есть
-        let startIdx = 0;
-        if(lines[0].toLowerCase().includes('фио')) startIdx = 1;
+        // Определяем формат: если в первой строке есть "Отображаемое имя", значит это выгрузка из AD
+        const isAD = lines[0].includes('Отображаемое имя');
+        const isADComma = isAD && lines[0].includes(','); 
+        
+        let startIdx = (isAD || lines[0].toLowerCase().includes('фио')) ? 1 : 0;
         
         for(let i = startIdx; i < lines.length; i++) {
-          const parts = lines[i].split(';');
-          if(parts.length >= 1 && parts[0]) {
-            payload.push({
-              full_name: parts[0].trim(),
-              position: parts[1] ? parts[1].trim() : '',
-              department: parts[2] ? parts[2].trim() : ''
-            });
+          // Разделяем по точке с запятой (Excel) или запятой (AD)
+          const parts = lines[i].split(isADComma ? ',' : ';');
+          if(parts.length < 2) continue;
+
+          let full_name, position, department;
+
+          if (isADComma) {
+            // Индексы из твоего AD-файла: 
+            // 2 - Отображаемое имя, 3 - Должность, 4 - Отдел, 8 - Статус
+            const status = parts[8] || '';
+            if (status.includes('ОТКЛЮЧЕН')) continue; // Пропускаем уволенных
+            
+            full_name = parts[2]?.trim();
+            position = parts[3]?.trim();
+            department = parts[4]?.trim();
+          } else {
+            // Обычный формат: ФИО;Должность;Отдел
+            full_name = parts[0]?.trim();
+            position = parts[1]?.trim();
+            department = parts[2]?.trim();
           }
+
+          // Если ФИО пустое, или это служебная учетка (нет запятой в имени), пропускаем
+          if(!full_name || full_name === '') continue;
+          
+          // Исключаем служебные аккаунты сканеров и студий
+          if(full_name.toLowerCase().includes('сканер') || full_name.toLowerCase().includes('студия') || full_name.toLowerCase().includes('обучение')) continue;
+
+          payload.push({ full_name, position, department });
         }
         
-        if(!payload.length) throw new Error('Пустой файл или неверный формат');
+        if(!payload.length) throw new Error('Не удалось распознать данные. Проверьте формат файла.');
         
         const res = await API.req('POST', '/api/employees/bulk', payload);
         toast(`Успешно загружено: ${res.added}`, 'ok');
