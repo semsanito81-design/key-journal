@@ -173,6 +173,21 @@ td.wrap-text { white-space: normal; min-width: 250px; } /* Чтобы серти
 .log-item pre{background:#f8fafc;padding:6px;border-radius:6px;
   overflow:auto;font-size:11px;margin:4px 0 0}
 
+/* Выпадающий список поиска */
+.autocomplete-wrap { position: relative; }
+.autocomplete-list {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  max-height: 200px; overflow-y: auto; z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; margin-top: 4px;
+}
+.autocomplete-list div {
+  padding: 8px 12px; cursor: pointer; font-size: 13px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.autocomplete-list div:hover { background: #eef2ff; }
+.autocomplete-list small { color: var(--muted); margin-left: 5px; }
+
 /* PRINT */
 @media print {
   @page { size: A4 landscape; margin: 10mm; } /* Горизонтальная ориентация и отступы 1 см */
@@ -717,6 +732,7 @@ async function openCarrierModal(row){
     existingCarriers = cars;
   } catch(e){ toast('Ошибка загрузки данных','error'); return; }
 
+  // Фильтруем тех, у кого нет ключа
   const availableEmployees = allEmployees.filter(emp => {
     const hasCarrier = existingCarriers.some(car => car.employee === emp.full_name);
     if (row && row.employee === emp.full_name) return true;
@@ -725,12 +741,12 @@ async function openCarrierModal(row){
 
   $('#modalBody').innerHTML = `
     <div class="form">
-      <label class="full">Сотрудник (только у кого нет ключа)
-        <input id="m_employee_search" list="emp_list" placeholder="Начните вводить ФИО..." value="${esc(row?.employee)}" autocomplete="off">
-        <datalist id="emp_list">
-          ${availableEmployees.map(e => `<option value="${esc(e.full_name)}">${esc(e.position||'')} ${esc(e.department||'')}</option>`).join('')}
-        </datalist>
-      </label>
+      <!-- ЗАМЕНИЛИ DATALIST НА КАСТОМНЫЙ СПИСОК -->
+      <div class="full autocomplete-wrap">
+        <label style="display:block; margin-bottom:4px; font-size:12px; color:var(--muted);">Сотрудник (начните вводить ФИО)</label>
+        <input id="m_employee_search" placeholder="Поиск по ФИО..." value="${esc(row?.employee)}" autocomplete="off" style="width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;">
+        <div id="emp_dropdown" class="autocomplete-list"></div>
+      </div>
       
       <label>Дата выдачи<input type="date" id="m_issueDate" value="${row?.issueDate||todayISO()}"></label>
       <label>Вид носителя
@@ -763,24 +779,71 @@ async function openCarrierModal(row){
         <button type="button" class="btn sm" id="clear-signature" style="margin-top:8px;">Очистить подпись</button>
       </div>
     </div>`;
+
+  // --- УМНЫЙ ПОИСК С ПРИВЕДЕНИЕМ К НИЖНЕМУ РЕГИСТРУ ---
+  const searchInput = $('#m_employee_search');
+  const dropdown = $('#emp_dropdown');
   
-  $('#m_employee_search').oninput = (e) => {
-    const emp = allEmployees.find(x => x.full_name === e.target.value);
-    if (emp) {
-      $('#m_position').value = emp.position || '';
-      $('#m_department').value = emp.department || '';
+  const renderDropdown = (query = '') => {
+    const q = query.toLowerCase().trim();
+    
+    const filtered = availableEmployees.filter(emp => {
+      if (!q) return true; 
+      // Принудительно приводим ФИО к нижнему регистру
+      const fullName = String(emp.full_name || '').toLowerCase();
+      return fullName.includes(q);
+    });
+    
+    if (filtered.length === 0) {
+      dropdown.innerHTML = '<div style="color:var(--muted); cursor:default; padding: 8px;">Ничего не найдено</div>';
+    } else {
+      dropdown.innerHTML = filtered.slice(0, 50).map(e => 
+        `<div data-name="${esc(e.full_name)}" data-pos="${esc(e.position||'')}" data-dept="${esc(e.department||'')}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9;">
+          <b>${esc(e.full_name)}</b> <small style="color: var(--muted); margin-left:5px;">${esc(e.position || '')}</small>
+        </div>`
+      ).join('');
+    }
+  };
+
+  searchInput.onfocus = () => {
+    renderDropdown(searchInput.value);
+    dropdown.style.display = 'block';
+  };
+
+  searchInput.oninput = (e) => {
+    renderDropdown(e.target.value);
+    dropdown.style.display = 'block';
+    
+    const exactMatch = availableEmployees.find(emp => emp.full_name === e.target.value);
+    if (exactMatch) {
+      $('#m_position').value = exactMatch.position || '';
+      $('#m_department').value = exactMatch.department || '';
+    }
+  };
+
+  dropdown.onclick = (e) => {
+    const div = e.target.closest('div[data-name]');
+    if (!div) return;
+    searchInput.value = div.dataset.name;
+    $('#m_position').value = div.dataset.pos;
+    $('#m_department').value = div.dataset.dept;
+    dropdown.style.display = 'none';
+  };
+
+  // Закрываем список при клике вне его
+  document.onmousedown = (e) => {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
     }
   };
   
-    // Инициализация Signature Pad
+  // --- ИНИЦИАЛИЗАЦИЯ ПОДПИСИ ---
   const canvas = document.getElementById('signature-pad');
   if (canvas) {
-    // 1. Даем браузеру время отрисовать модалку
     setTimeout(() => {
-      // 2. Подгоняем внутреннее разрешение холста под его реальный размер на экране
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       canvas.width = canvas.offsetWidth * ratio;
-      canvas.height = 150 * ratio; // Фиксированная высота 150px
+      canvas.height = 150 * ratio;
       canvas.getContext("2d").scale(ratio, ratio);
       canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
       canvas.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
@@ -790,7 +853,6 @@ async function openCarrierModal(row){
         penColor: 'rgb(29, 78, 216)'
       });
 
-      // Если редактируем и подпись есть — загружаем
       if (row && row.signatureData) {
          signaturePad.fromDataURL(row.signatureData);
       }
@@ -804,7 +866,7 @@ async function openCarrierModal(row){
         if (signaturePad.isEmpty()) return row?.signatureData || null;
         return signaturePad.toDataURL('image/png');
       };
-    }, 100); // Задержка 100мс
+    }, 100);
   } else {
     window.getSignature = () => null;
   }
