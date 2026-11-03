@@ -482,11 +482,13 @@ async function renderTopbarActions(){
       <label class="btn" style="cursor:pointer">📥 Импорт Excel
         <input type="file" id="tbImport" accept=".xlsx,.xls" hidden></label>
       <button class="btn" id="tbExport">⬇️ Экспорт CSV</button>
+      <button class="btn" id="tbExportExcel" style="background:#16a34a; color:white; border:none;">📊 Скачать Excel</button>
       <button class="btn" id="tbPrint">🖨 Печать списка</button>`;
     $('#tbAdd').onclick = ()=>openCarrierModal(null);
     $('#tbImport').onchange = importExcel;
     $('#tbExport').onclick = exportCsv;
     $('#tbPrint').onclick = printJournal;
+    $('#tbExportExcel').onclick = () => {window.location.href = '/api/export/excel';};
   }
   if(currentView==='users' && can('admin')){
     box.innerHTML = `<button class="btn primary" id="tbAddUser">➕ Пользователь</button>`;
