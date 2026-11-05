@@ -1150,36 +1150,146 @@ function printJournal(){
 async function renderDashboard(){
   let certs, carriers;
   try{ certs = await API.certs(); carriers = await API.carriers(); }catch(ex){ toast(ex.message,'error'); return; }
+  // Считаем статистику по типам
   const byType = {};
-  for(const c of certs){ const t = c.type_name || String(c.cert_type); byType[t] ||= {total:0,expiring30:0,expiring60:0,expiring90:0,expired:0}; byType[t].total++; if(c.valid_to){ const dl = daysBetween(c.valid_to.slice(0,10)); if(dl<0) byType[t].expired++; else { if(dl<=30) byType[t].expiring30++; if(dl<=60) byType[t].expiring60++; if(dl<=90) byType[t].expiring90++; } } }
+  for(const c of certs){
+    const t = c.type_name || String(c.cert_type);
+    byType[t] ||= {total:0, expiring30:0, expiring60:0, expiring90:0, expired:0};
+    byType[t].total++;
+    if(c.valid_to){
+      const dl = daysBetween(c.valid_to);
+      if(dl < 0) byType[t].expired++;
+      else{
+        if(dl <= 30) byType[t].expiring30++;
+        if(dl <= 60) byType[t].expiring60++;
+        if(dl <= 90) byType[t].expiring90++;
+      }
+    }
+  }
+    // Считаем общую статистику для верхних плашек
   const totalExpired = Object.values(byType).reduce((s,x)=>s+x.expired,0);
   const total30 = Object.values(byType).reduce((s,x)=>s+x.expiring30,0);
-  const expiringList = certs.filter(c=>{ if(!c.valid_to) return false; const dl = daysBetween(c.valid_to.slice(0,10)); return dl!=null && dl>=0 && dl<=90; }).sort((a,b)=> new Date(a.valid_to)-new Date(b.valid_to));
-  
+
+  const expiringList = certs.filter(c=>{
+    if(!c.valid_to) return false;
+    const dl = daysBetween(c.valid_to.slice(0,10));
+    return dl!=null && dl>=0 && dl<=90;
+  }).sort((a,b)=> new Date(a.valid_to)-new Date(b.valid_to));
+
+  // Формируем карточки с data-filter для клика
+  const cardsHtml = Object.entries(byType).map(([t, s]) => {
+    // Все карточки типов делаем кликабельными, чтобы посмотреть всех
+    const filterAttr = `data-filter-type="${t}"`;
+    const clickStyle = 'cursor:pointer; transition: transform 0.2s;';
+
+    return `
+      <div class="card ${s.expiring30?'warn':s.expired?'danger':''}" ${filterAttr} style="${clickStyle}" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+        <div class="label">${esc(t)}</div>
+        <div class="value">${s.total}</div>
+        <div class="sub">
+          ≤30: ${s.expiring30} · ≤60: ${s.expiring60} · ≤90: ${s.expiring90}<br>
+          истекло: ${s.expired} <br><span style="color:var(--accent); font-size:10px;">(клик для просмотра)</span>
+        </div>
+      </div>`;
+  }).join('');
+
   $('#content').innerHTML = `
     <div class="cards">
       <div class="card"><div class="label">Носителей</div><div class="value">${carriers.length}</div></div>
       <div class="card"><div class="label">Сертификатов</div><div class="value">${certs.length}</div></div>
-      <div class="card danger"><div class="label">Истекло</div><div class="value">${totalExpired}</div></div>
+      <div class="card danger" data-filter-expired="true" style="cursor:pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+        <div class="label">Всего истекло</div>
+        <div class="value">${totalExpired}</div>
+        ${totalExpired > 0 ? '<div class="sub">Нажмите для просмотра</div>' : ''}
+      </div>
       <div class="card warn"><div class="label">Истекает ≤30 дн.</div><div class="value">${total30}</div></div>
     </div>
+    
     <h3 style="margin:16px 0 8px">По типам сертификатов</h3>
-    <div class="cards">
-      ${Object.entries(byType).map(([t,s])=>`
-        <div class="card ${s.expiring30?'warn':s.expired?'danger':''}">
-          <div class="label">${esc(t)}</div>
-          <div class="value">${s.total}</div>
-          <div class="sub">≤30: ${s.expiring30} · ≤60: ${s.expiring60} · ≤90: ${s.expiring90}<br>истекло: ${s.expired}</div>
-        </div>`).join('')}
+    <div class="cards" id="type-cards">
+      ${cardsHtml}
     </div>
+
     <h3 style="margin:16px 0 8px">Истекают в ближайшие 90 дней (${expiringList.length})</h3>
     <div class="table-wrap"><table>
-      <thead><tr><th>ФИО</th><th>Носитель</th><th>Тип</th><th>Серийник</th><th>Действует до</th><th>Осталось</th></tr></thead>
+      <thead><tr><th>ФИО</th><th>Носитель</th><th>Тип</th><th>Серийник</th>
+        <th>Действует до</th><th>Осталось</th></tr></thead>
       <tbody>${expiringList.slice(0,100).map(c=>{
-        const dl = daysBetween(c.valid_to.slice(0,10));
-        return `<tr><td>${esc(c.employee||'')}</td><td>${esc(c.carrier_serial||'')}</td><td>${esc(c.type_name||'')}</td><td>${esc(c.serial_number||'')}</td><td>${fmtDate(c.valid_to)}</td><td class="${dl<60?'exp-warn':''}">${dl} дн.</td></tr>`;
+        const dl = daysBetween(c.valid_to);
+        return `<tr>
+          <td>${esc(c.employee||'')}</td>
+          <td>${esc(c.carrier_serial||'')}</td>
+          <td>${esc(c.type_name||'')}</td>
+          <td>${esc(c.serial_number||'')}</td>
+          <td>${fmtDate(c.valid_to)}</td>
+          <td class="${dl<60?'exp-warn':''}">${dl} дн.</td>
+        </tr>`;
       }).join('') || '<tr><td colspan="6" class="empty">Нет</td></tr>'}</tbody>
     </table></div>`;
+
+  // Обработчик кликов по карточкам
+  $('#content').onclick = (e) => {
+    const card = e.target.closest('.card');
+    if (!card) return;
+    
+    const typeFilter = card.dataset.filterType;
+    const isTotalExpired = card.dataset.filterExpired;
+
+    if (typeFilter) {
+      // Кликнули по конкретному типу (2FA, ЦОД, Админ, Оператор) — показываем ВСЕХ этого типа
+      const filteredList = certs.filter(c => (c.type_name || String(c.cert_type)) === typeFilter);
+      showDashboardDetails(typeFilter, filteredList);
+    } 
+    else if (isTotalExpired) {
+      // Кликнули по "Всего истекло" — показываем ТОЛЬКО истекших
+      const filteredList = certs.filter(c => {
+        if(!c.valid_to) return false;
+        return daysBetween(c.valid_to) < 0;
+      });
+      showDashboardDetails('Истекшие', filteredList);
+    }
+  };
+}
+
+function showDashboardDetails(title, list) {
+  $('#modalTitle').textContent = title === 'Истекшие' ? 'Истекшие сертификаты' : `Сертификаты: ${title}`;
+  
+  if (!list.length) {
+    $('#modalBody').innerHTML = `<div class="empty" style="padding:20px; text-align:center;">Нет данных по этому фильтру</div>`;
+  } else {
+    $('#modalBody').innerHTML = `
+      <div class="table-wrap" style="max-height: 60vh; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Сотрудник</th>
+              <th>Носитель</th>
+              <th>Серийник</th>
+              <th>Действует до</th>
+              <th>Остаток</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(c => {
+              const dl = daysBetween(c.valid_to);
+              const leftCls = dl < 0 ? 'exp-red' : (dl < 60 ? 'exp-warn' : '');
+              const leftTxt = dl == null ? '—' : (dl < 0 ? `Истёк ${-dl} дн. назад` : `${dl} дн.`);
+              
+              return `<tr>
+                <td><b>${esc(c.employee || '—')}</b></td>
+                <td>${esc(c.carrier_serial || '—')}</td>
+                <td class="num">${esc(c.serial_number || '—')}</td>
+                <td>${fmtDate(c.valid_to)}</td>
+                <td class="${leftCls}">${leftTxt}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+  
+  $('#modalFooter').innerHTML = `<button class="btn" onclick="closeModal()">Закрыть</button>`;
+  $('#backdrop').classList.add('open');
 }
 
 async function renderTypes(){
