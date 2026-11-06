@@ -13,6 +13,7 @@ import auditRoutes from './routes/audit.js';
 import certRoutes from './routes/certificates.js';
 import employeeRoutes from './routes/employees.js';
 import exportRoutes from './routes/export.js';
+import assetRoutes from './routes/assets.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +32,7 @@ app.register(auditRoutes, { prefix:'/api/audit' });
 app.register(certRoutes, { prefix:'/api/certificates' });
 app.register(employeeRoutes, { prefix: '/api/employees' });
 app.register(exportRoutes, { prefix: '/api/export' });
+app.register(assetRoutes, { prefix: '/api/assets' });
 
 app.setErrorHandler((err,req,reply)=>{
   app.log.error(err);

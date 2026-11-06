@@ -10,3 +10,8 @@ node_modules/
 *.sql
 *.log
 tmp/
+
+import_assets.js
+check_excel.js
+check_excel2.js
+check_missing.js

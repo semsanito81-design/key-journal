@@ -241,7 +241,8 @@ td.wrap-text { white-space: normal; min-width: 250px; } /* Чтобы серти
     <div class="brand">🔑 Журнал носителей</div>
     <nav class="nav">
       <a href="#dashboard" data-view="dashboard">📊 Дашборд</a>
-      <a href="#journal" data-view="journal">📋 Журнал</a>      
+      <a href="#journal" data-view="journal">📋 Журнал</a>
+      <a href="#assets" data-view="assets">🖥️ Оборудование</a>      
       <a href="#employees" data-view="employees">👤 Сотрудники</a>
       <a href="#types" data-view="types" data-role="admin">🏷 Типы сертификатов</a>
       <a href="#users" data-view="users" data-role="admin">👥 Пользователи</a>
@@ -324,6 +325,13 @@ const API = {
   addEmployee:(e)=>API.req('POST','/api/employees',e),
   updEmployee:(id,e)=>API.req('PATCH','/api/employees/'+id,e),
   delEmployee:(id)=>API.req('DELETE','/api/employees/'+id),
+
+  assets:(f={})=>API.req('GET','/api/assets?'+new URLSearchParams(
+    Object.fromEntries(Object.entries(f).filter(([,v])=>v!=null && v!=='')))),
+  assetTypes:()=>API.req('GET','/api/assets/types'),
+  addAsset:(a)=>API.req('POST','/api/assets',a),
+  updAsset:(id,a)=>API.req('PATCH','/api/assets/'+id,a),
+  delAsset:(id)=>API.req('DELETE','/api/assets/'+id),
 
   users:()=>API.req('GET','/api/users'),
   addUser:u=>API.req('POST','/api/users',u),
@@ -452,19 +460,20 @@ function bootApp(){
 async function route(){
   const h = location.hash.replace('#','') || 'journal';
   const allowed = {
-    dashboard:()=>true, journal:()=>true, employees:()=>true, profile:()=>true,
+    dashboard:()=>true, journal:()=>true, assets:()=>true, employees:()=>true, profile:()=>true,
     types:()=>can('admin'), users:()=>can('admin'), audit:()=>can('admin,auditor')
   };
   if(!allowed[h] || !allowed[h]()){ location.hash='journal'; return; }
   currentView = h;
   $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===h));
-  const titles = {dashboard:'Дашборд',journal:'Журнал',employees:'Сотрудники',types:'Типы сертификатов',
+  const titles = {dashboard:'Дашборд',journal:'Журнал',assets:'Оборудование',employees:'Сотрудники',types:'Типы сертификатов',
                   users:'Пользователи',audit:'Аудит-лог',profile:'Профиль'};
   $('#viewTitle').textContent = titles[h]||'';
   await renderTopbarActions();
   try{
     if(h==='dashboard') await renderDashboard();
     if(h==='journal')   await renderJournal();
+    if(h==='assets') await renderAssets();
     if(h==='employees') await renderEmployees();    
     if(h==='types')     await renderTypes();
     if(h==='users')     await renderUsers();
@@ -490,9 +499,10 @@ async function renderTopbarActions(){
     $('#tbPrint').onclick = printJournal;
     $('#tbExportExcel').onclick = () => {window.location.href = '/api/export/excel';};
   }
+  
   if(currentView==='users' && can('admin')){
     box.innerHTML = `<button class="btn primary" id="tbAddUser">➕ Пользователь</button>`;
-    $('#tbAddUser').onclick = ()=>openUserModal(null);
+    $('#tbAddUser').onclick = ()=>openUserModal(null);  
   }
   if(currentView==='types' && can('admin')){
     box.innerHTML = `<button class="btn primary" id="tbAddType">➕ Тип</button>`;
@@ -1338,6 +1348,241 @@ function openTypeModal(t){
       closeModal(); await renderTypes(); toast('Сохранено','ok');
     }catch(ex){ toast(ex.message,'error'); }
   };
+  $('#backdrop').classList.add('open');
+}
+
+let assetsList = []; // Глобальная переменная для текущего списка
+let assetSortKey = 'model';
+let assetSortDesc = false;
+
+async function renderAssets() {
+  let types = [];
+  try { types = await API.assetTypes(); } catch(e) {}
+
+  $('#content').innerHTML = `
+    <div class="toolbar">
+      <input id="as_q" placeholder="Поиск: модель, инв.№, серийник, АРМ…">
+      <select id="as_type">
+        <option value="">Все типы</option>
+        ${types.map(t => `<option value="${t.code}">${t.name}</option>`).join('')}
+      </select>
+      <select id="as_status">
+        <option value="">Все статусы</option>
+        <option value="active">🟢 В работе</option>
+        <option value="repair">🟡 В ремонте</option>
+        <option value="storage">🔵 На складе</option>
+        <option value="written_off">🔴 Списано</option>
+      </select>
+      <span class="spacer"></span>
+      ${can('admin,operator') ? `<button class="btn primary" id="as_add">➕ Добавить</button>` : ''}
+      <span id="as_stat" style="color:var(--muted); margin-left: 10px;"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-key="type_code" style="cursor:pointer;">Тип <span id="s-type_code"></span></th>
+            <th data-key="model" style="cursor:pointer;">Модель <span id="s-model"></span></th>
+            <th data-key="inv_number" style="cursor:pointer;">Инв. № <span id="s-inv_number"></span></th>
+            <th data-key="serial_number" style="cursor:pointer;">Серийник <span id="s-serial_number"></span></th>
+            <th data-key="arm_name" style="cursor:pointer;">АРМ <span id="s-arm_name"></span></th>
+            <th data-key="location" style="cursor:pointer;">Место <span id="s-location"></span></th>
+            <th data-key="status" style="cursor:pointer;">Статус <span id="s-status"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="as_tbody"></tbody>
+      </table>
+    </div>
+  `;
+
+  const loadTable = async () => {
+    const filters = {
+      q: $('#as_q').value,
+      type: $('#as_type').value,
+      status: $('#as_status').value
+    };
+    
+    try {
+      assetsList = await API.assets(filters);
+      
+      // Сортировка
+      if (assetsList.length > 0) {
+        assetsList.sort((a, b) => {
+          let va = a[assetSortKey] || '';
+          let vb = b[assetSortKey] || '';
+          if (typeof va === 'string' && typeof vb === 'string') {
+            return assetSortDesc ? vb.localeCompare(va, 'ru') : va.localeCompare(vb, 'ru');
+          }
+          return assetSortDesc ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1);
+        });
+      }
+      const tb = $('#as_tbody');
+      
+      if (!assetsList || assetsList.length === 0) {
+        tb.innerHTML = `<tr><td colspan="8" class="empty">Нет оборудования</td></tr>`;
+      } else {
+        tb.innerHTML = assetsList.map(a => {
+          let stBadge = '<span class="badge active">В работе</span>';
+          let rowStyle = '';
+          if (a.status === 'repair') stBadge = '<span class="badge reserved">В ремонте</span>';
+          if (a.status === 'storage') stBadge = '<span class="badge returned">На складе</span>';
+          if (a.status === 'written_off') {
+            stBadge = '<span class="badge expired">Списано</span>';
+            rowStyle = 'text-decoration: line-through; color: #999;';
+          }
+
+          return `<tr style="${rowStyle}">
+            <td><b>${esc(a.type_code)}</b></td>
+            <td>${esc(a.model)}</td>
+            <td class="num">${esc(a.inv_number || '—')}</td>
+            <td class="num">${esc(a.serial_number || '—')}</td>
+            <td>${esc(a.arm_name || '—')}</td>
+            <td>${esc(a.location || '—')}</td>
+            <td>${stBadge}</td>
+            <td>
+              ${can('admin,operator') ? `
+                <button class="btn sm" data-act="edit" data-id="${a.id}">✏️</button>
+                <button class="btn sm danger" data-act="del" data-id="${a.id}">🗑</button>
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('');
+      }
+      $('#as_stat').textContent = `Всего: ${assetsList.length}`;
+    } catch(ex) { toast(ex.message, 'error'); }
+  };
+
+  // Обработчики фильтров
+  $('#as_q').oninput = debounce(loadTable, 300);
+  $('#as_type').onchange = loadTable;
+  $('#as_status').onchange = loadTable;
+
+  // Кнопка добавления
+  if($('#as_add')) $('#as_add').onclick = () => openAssetModal(null, types);
+
+  // Обработчик кнопок в таблице
+  $('#as_tbody').onclick = (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    
+    if (btn.dataset.act === 'edit') {
+      const item = assetsList.find(x => x.id === id);
+      if (item) openAssetModal(item, types);
+    }
+    if (btn.dataset.act === 'del') {
+      if (confirm('Удалить оборудование?')) {
+        API.delAsset(id).then(() => {
+          loadTable();
+          toast('Удалено', 'ok');
+        }).catch(ex => toast(ex.message, 'error'));
+      }
+    }
+  };
+  $$('th[data-key]').forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.key;
+      if (assetSortKey === key) {
+        assetSortDesc = !assetSortDesc;
+      } else {
+        assetSortKey = key;
+        assetSortDesc = false;
+      }
+      loadTable(); // Перезагружаем таблицу с новой сортировкой
+    };
+  });
+
+  loadTable();
+}
+
+async function openAssetModal(item, types) {
+  let employees = [];
+  try {
+    employees = await API.employees(); // Получаем список сотрудников
+  } catch(e) { console.error('Не удалось загрузить сотрудников', e); }
+  const isEdit = !!item;
+  $('#modalTitle').textContent = isEdit ? 'Редактировать оборудование' : 'Новое оборудование';
+  
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label>Тип
+        <select id="m_type">
+          ${types.map(t => `<option value="${t.code}" ${item?.type_code === t.code ? 'selected' : ''}>${t.name}</option>`).join('')}
+        </select>
+      </label>
+      <label>Модель<input id="m_model" value="${esc(item?.model)}" required></label>
+      <label>Инв. №<input id="m_inv" value="${esc(item?.inv_number)}"></label>
+      <label>Серийный номер<input id="m_serial" value="${esc(item?.serial_number)}"></label>
+      <label>АРМ<input id="m_arm" value="${esc(item?.arm_name)}"></label>
+      <label>Сотрудник
+        <input id="m_employee_search" list="emp_list_assets" placeholder="Начните вводить ФИО..." value="${esc(item?.employee_name || '')}">
+        <datalist id="emp_list_assets">
+          ${employees.map(e => `<option value="${esc(e.full_name)}">${esc(e.position||'')}</option>`).join('')}
+        </datalist>
+      </label>
+      <label>Место (кабинет)
+        <input id="m_loc" value="${esc(item?.location)}">
+      </label>
+      <label>Статус
+        <select id="m_status">
+          <option value="active" ${item?.status === 'active' ? 'selected' : ''}>В работе</option>
+          <option value="repair" ${item?.status === 'repair' ? 'selected' : ''}>В ремонте</option>
+          <option value="storage" ${item?.status === 'storage' ? 'selected' : ''}>На складе</option>
+          <option value="written_off" ${item?.status === 'written_off' ? 'selected' : ''}>Списано</option>
+        </select>
+      </label>
+      <label class="full">Примечание<textarea id="m_note">${esc(item?.note)}</textarea></label>
+    </div>
+  `;
+
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="m_cancel">Отмена</button>
+    <button class="btn primary" id="m_save">Сохранить</button>
+  `;
+
+  $('#m_cancel').onclick = closeModal;
+  $('#m_save').onclick = async () => {
+    // 1. Получаем то, что ввел пользователь в поле сотрудника
+    const empName = $('#m_employee_search').value.trim();
+    let employeeId = null;
+
+    // 2. Если поле не пустое, ищем этого сотрудника в нашем списке (employees)
+    if (empName) {
+      const emp = employees.find(e => e.full_name === empName);
+      if (emp) {
+        employeeId = emp.id; // Нашли ID сотрудника
+      } else {
+        toast('Сотрудник не найден в базе. Выберите из списка.', 'error');
+        return;
+      }
+    }
+
+    // 3. Формируем объект для отправки на сервер
+    const rec = {
+      type_code: $('#m_type').value,
+      model: $('#m_model').value.trim(),
+      inv_number: $('#m_inv').value.trim(),
+      serial_number: $('#m_serial').value.trim(),
+      arm_name: $('#m_arm').value.trim(),
+      location: $('#m_loc').value.trim(), // Кабинет
+      status: $('#m_status').value,
+      note: $('#m_note').value.trim(),
+      employee_id: employeeId // <--- ПЕРЕДАЕМ ID СОТРУДНИКА НА СЕРВЕР
+    };
+    
+    if (!rec.model) { toast('Укажите модель', 'error'); return; }
+    
+    try {
+      if (isEdit) await API.updAsset(item.id, rec);
+      else await API.addAsset(rec);
+      
+      closeModal();
+      toast('Сохранено', 'ok');
+      renderAssets();
+    } catch(ex) { toast(ex.message, 'error'); }
+  };
+
   $('#backdrop').classList.add('open');
 }
 
