@@ -188,6 +188,18 @@ td.wrap-text { white-space: normal; min-width: 250px; } /* Чтобы серти
 .autocomplete-list div:hover { background: #eef2ff; }
 .autocomplete-list small { color: var(--muted); margin-left: 5px; }
 
+th {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 10; /* Важно: чтобы шапка была поверх строк */
+  cursor: pointer;
+  user-select: none;
+}
+
 /* PRINT */
 @media print {
   @page { size: A4 landscape; margin: 10mm; } /* Горизонтальная ориентация и отступы 1 см */
@@ -1351,77 +1363,90 @@ function openTypeModal(t){
   $('#backdrop').classList.add('open');
 }
 
-let assetsList = []; // Глобальная переменная для текущего списка
+let assetsList = [];
+let assetsViewMode = 'flat';
+let openArms = new Set();
 let assetSortKey = 'model';
 let assetSortDesc = false;
+let globalAssetTypes = [];
 
-async function renderAssets() {
-  let types = [];
-  try { types = await API.assetTypes(); } catch(e) {}
-
-  $('#content').innerHTML = `
-    <div class="toolbar">
-      <input id="as_q" placeholder="Поиск: модель, инв.№, серийник, АРМ…">
-      <select id="as_type">
-        <option value="">Все типы</option>
-        ${types.map(t => `<option value="${t.code}">${t.name}</option>`).join('')}
-      </select>
-      <select id="as_status">
-        <option value="">Все статусы</option>
-        <option value="active">🟢 В работе</option>
-        <option value="repair">🟡 В ремонте</option>
-        <option value="storage">🔵 На складе</option>
-        <option value="written_off">🔴 Списано</option>
-      </select>
-      <span class="spacer"></span>
-      ${can('admin,operator') ? `<button class="btn primary" id="as_add">➕ Добавить</button>` : ''}
-      <span id="as_stat" style="color:var(--muted); margin-left: 10px;"></span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th data-key="type_code" style="cursor:pointer;">Тип <span id="s-type_code"></span></th>
-            <th data-key="model" style="cursor:pointer;">Модель <span id="s-model"></span></th>
-            <th data-key="inv_number" style="cursor:pointer;">Инв. № <span id="s-inv_number"></span></th>
-            <th data-key="serial_number" style="cursor:pointer;">Серийник <span id="s-serial_number"></span></th>
-            <th data-key="arm_name" style="cursor:pointer;">АРМ <span id="s-arm_name"></span></th>
-            <th data-key="location" style="cursor:pointer;">Место <span id="s-location"></span></th>
-            <th data-key="status" style="cursor:pointer;">Статус <span id="s-status"></span></th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="as_tbody"></tbody>
-      </table>
-    </div>
-  `;
-
-  const loadTable = async () => {
-    const filters = {
-      q: $('#as_q').value,
-      type: $('#as_type').value,
-      status: $('#as_status').value
-    };
+// ГЛОБАЛЬНАЯ функция для загрузки и отрисовки таблицы
+window.loadAssetsTable = async () => {
+  const q = document.getElementById('as_q')?.value || '';
+  const type = document.getElementById('as_type')?.value || '';
+  const status = document.getElementById('as_status')?.value || '';
+  
+  try {
+    assetsList = await API.assets({ q, type, status });
     
-    try {
-      assetsList = await API.assets(filters);
-      
-      // Сортировка
-      if (assetsList.length > 0) {
-        assetsList.sort((a, b) => {
-          let va = a[assetSortKey] || '';
-          let vb = b[assetSortKey] || '';
-          if (typeof va === 'string' && typeof vb === 'string') {
-            return assetSortDesc ? vb.localeCompare(va, 'ru') : va.localeCompare(vb, 'ru');
-          }
-          return assetSortDesc ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1);
+    // Сортировка
+    if (assetsList && assetsList.length > 0) {
+      assetsList.sort((a, b) => {
+        let va = a[assetSortKey] || '';
+        let vb = b[assetSortKey] || '';
+        if (typeof va === 'string' && typeof vb === 'string') {
+          return assetSortDesc ? vb.localeCompare(va, 'ru') : va.localeCompare(vb, 'ru');
+        }
+        return assetSortDesc ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1);
+      });
+    }
+
+    const tb = document.getElementById('as_tbody');
+    if (!tb) return;
+
+    if (!assetsList || assetsList.length === 0) {
+      tb.innerHTML = `<tr><td colspan="8" class="empty">Нет оборудования</td></tr>`;
+    } else {
+      if (assetsViewMode === 'grouped') {
+        // ГРУППИРОВКА ПО АРМ
+        const groups = {};
+        assetsList.forEach(a => {
+          const key = a.arm_name || 'Без АРМ (Склад / Ремонт)';
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(a);
         });
-      }
-      const tb = $('#as_tbody');
-      
-      if (!assetsList || assetsList.length === 0) {
-        tb.innerHTML = `<tr><td colspan="8" class="empty">Нет оборудования</td></tr>`;
+
+        let html = '';
+        for (const [arm, items] of Object.entries(groups)) {
+          const isOpen = openArms.has(arm);
+          const first = items[0];
+          const locText = first.location ? esc(first.location) : '—';
+          const arrow = isOpen ? '▼' : '▶';
+          
+          html += `<tr class="group-header" style="background:#f8fafc; border-top: 2px solid var(--line); cursor: pointer;" onclick="event.stopPropagation(); toggleArm('${esc(arm)}')">
+            <td colspan="2"><b>${arrow} 🖥️ ${esc(arm)}</b></td>
+            <td colspan="3"><b>${locText}</b></td>
+            <td colspan="2" style="text-align:right; color:var(--muted); font-size:12px;">Техники: ${items.length}</td>
+            <td></td>
+          </tr>`;
+
+          if (isOpen) {
+            html += items.map(a => {
+              let stBadge = '<span class="badge active">В работе</span>';
+              if (a.status === 'repair') stBadge = '<span class="badge reserved">В ремонте</span>';
+              if (a.status === 'storage') stBadge = '<span class="badge returned">На складе</span>';
+              if (a.status === 'written_off') stBadge = '<span class="badge expired">Списано</span>';
+              
+              return `<tr style="background:#fff;">
+                <td style="padding-left:20px; color:var(--muted);">└ ${esc(a.type_code)}</td>
+                <td>${esc(a.model)}</td>
+                <td class="num">${esc(a.inv_number || '—')}</td>
+                <td class="num">${esc(a.serial_number || '—')}</td>
+                <td>${esc(a.arm_name)}</td>
+                <td>${stBadge}</td>
+                <td>
+                  ${can('admin,operator') ? `
+                    <button class="btn sm" data-act="edit" data-id="${a.id}">✏️</button>
+                    <button class="btn sm danger" data-act="del" data-id="${a.id}">🗑</button>
+                  ` : ''}
+                </td>
+              </tr>`;
+            }).join('');
+          }
+        }
+        tb.innerHTML = html;
       } else {
+        // ПЛОСКИЙ ВИД
         tb.innerHTML = assetsList.map(a => {
           let stBadge = '<span class="badge active">В работе</span>';
           let rowStyle = '';
@@ -1438,7 +1463,7 @@ async function renderAssets() {
             <td class="num">${esc(a.inv_number || '—')}</td>
             <td class="num">${esc(a.serial_number || '—')}</td>
             <td>${esc(a.arm_name || '—')}</td>
-            <td>${esc(a.location || '—')}</td>
+            <td>${esc(a.location || '—')} ${a.employee_name ? `<br><small>${esc(a.employee_name)}</small>` : ''}</td>
             <td>${stBadge}</td>
             <td>
               ${can('admin,operator') ? `
@@ -1449,20 +1474,85 @@ async function renderAssets() {
           </tr>`;
         }).join('');
       }
-      $('#as_stat').textContent = `Всего: ${assetsList.length}`;
-    } catch(ex) { toast(ex.message, 'error'); }
+    }
+    document.getElementById('as_stat').textContent = `Всего: ${assetsList.length}`;
+  } catch(ex) { toast(ex.message, 'error'); }
+};
+
+window.toggleArm = function(armName) {
+  if (openArms.has(armName)) openArms.delete(armName);
+  else openArms.add(armName);
+  window.loadAssetsTable();
+};
+
+async function renderAssets() {
+  let types = [];
+  try { types = await API.assetTypes(); globalAssetTypes = types; } catch(e) {}
+  
+  $('#content').innerHTML = `
+    <div class="toolbar">
+      <input id="as_q" placeholder="Поиск: модель, инв.№, серийник, АРМ…">
+      <select id="as_type">
+        <option value="">Все типы</option>
+        ${types.map(t => `<option value="${t.code}">${t.name}</option>`).join('')}
+      </select>
+      <select id="as_status">
+        <option value="">Все статусы</option>
+        <option value="active">🟢 В работе</option>
+        <option value="repair">🟡 В ремонте</option>
+        <option value="storage">🔵 На складе</option>
+        <option value="written_off">🔴 Списано</option>
+      </select>
+      <label class="chk">
+        <input type="checkbox" id="as_group" ${assetsViewMode === 'grouped' ? 'checked' : ''}> 
+        Свернуть по АРМ
+      </label>
+      <span class="spacer"></span>
+      ${can('admin,operator') ? `<button class="btn primary" id="as_add">➕ Добавить</button>` : ''}
+      <span id="as_stat" style="color:var(--muted); margin-left: 10px;"></span>
+    </div>
+    <div class="table-wrap" style="max-height: calc(100vh - 180px); overflow-y: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th data-key="type_code" style="cursor:pointer;">Тип</th>
+            <th data-key="model" style="cursor:pointer;">Модель</th>
+            <th data-key="inv_number" style="cursor:pointer;">Инв. №</th>
+            <th data-key="serial_number" style="cursor:pointer;">Серийник</th>
+            <th data-key="arm_name" style="cursor:pointer;">АРМ</th>
+            <th data-key="location" style="cursor:pointer;">Место / Сотрудник</th>
+            <th data-key="status" style="cursor:pointer;">Статус</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="as_tbody"></tbody>
+      </table>
+    </div>
+  `;
+
+  $('#as_q').oninput = debounce(window.loadAssetsTable, 300);
+  $('#as_type').onchange = window.loadAssetsTable;
+  $('#as_status').onchange = window.loadAssetsTable;
+
+  $('#as_group').onchange = (e) => {
+    assetsViewMode = e.target.checked ? 'grouped' : 'flat';
+    window.loadAssetsTable();
   };
 
-  // Обработчики фильтров
-  $('#as_q').oninput = debounce(loadTable, 300);
-  $('#as_type').onchange = loadTable;
-  $('#as_status').onchange = loadTable;
+  if($('#as_add')) {
+    $('#as_add').onclick = () => openAssetModal(null, types);
+  }
 
-  // Кнопка добавления
-  if($('#as_add')) $('#as_add').onclick = () => openAssetModal(null, types);
+  $$('th[data-key]').forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.key;
+      if (assetSortKey === key) assetSortDesc = !assetSortDesc;
+      else { assetSortKey = key; assetSortDesc = false; }
+      window.loadAssetsTable();
+    };
+  });
 
-  // Обработчик кнопок в таблице
-  $('#as_tbody').onclick = (e) => {
+  $('#as_tbody').onclick = async (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
     const id = btn.dataset.id;
@@ -1473,37 +1563,25 @@ async function renderAssets() {
     }
     if (btn.dataset.act === 'del') {
       if (confirm('Удалить оборудование?')) {
-        API.delAsset(id).then(() => {
-          loadTable();
+        try {
+          await API.delAsset(id);
+          window.loadAssetsTable();
           toast('Удалено', 'ok');
-        }).catch(ex => toast(ex.message, 'error'));
+        } catch(ex) { toast(ex.message, 'error'); }
       }
     }
   };
-  $$('th[data-key]').forEach(th => {
-    th.onclick = () => {
-      const key = th.dataset.key;
-      if (assetSortKey === key) {
-        assetSortDesc = !assetSortDesc;
-      } else {
-        assetSortKey = key;
-        assetSortDesc = false;
-      }
-      loadTable(); // Перезагружаем таблицу с новой сортировкой
-    };
-  });
 
-  loadTable();
+  window.loadAssetsTable();
 }
 
 async function openAssetModal(item, types) {
-  let employees = [];
-  try {
-    employees = await API.employees(); // Получаем список сотрудников
-  } catch(e) { console.error('Не удалось загрузить сотрудников', e); }
   const isEdit = !!item;
   $('#modalTitle').textContent = isEdit ? 'Редактировать оборудование' : 'Новое оборудование';
   
+  let employees = [];
+  try { employees = await API.employees(); } catch(e) {}
+
   $('#modalBody').innerHTML = `
     <div class="form">
       <label>Тип
@@ -1521,9 +1599,7 @@ async function openAssetModal(item, types) {
           ${employees.map(e => `<option value="${esc(e.full_name)}">${esc(e.position||'')}</option>`).join('')}
         </datalist>
       </label>
-      <label>Место (кабинет)
-        <input id="m_loc" value="${esc(item?.location)}">
-      </label>
+      <label>Место (кабинет)<input id="m_loc" value="${esc(item?.location)}"></label>
       <label>Статус
         <select id="m_status">
           <option value="active" ${item?.status === 'active' ? 'selected' : ''}>В работе</option>
@@ -1543,32 +1619,21 @@ async function openAssetModal(item, types) {
 
   $('#m_cancel').onclick = closeModal;
   $('#m_save').onclick = async () => {
-    // 1. Получаем то, что ввел пользователь в поле сотрудника
     const empName = $('#m_employee_search').value.trim();
     let employeeId = null;
+    const emp = employees.find(e => e.full_name === empName);
+    if (emp) employeeId = emp.id;
 
-    // 2. Если поле не пустое, ищем этого сотрудника в нашем списке (employees)
-    if (empName) {
-      const emp = employees.find(e => e.full_name === empName);
-      if (emp) {
-        employeeId = emp.id; // Нашли ID сотрудника
-      } else {
-        toast('Сотрудник не найден в базе. Выберите из списка.', 'error');
-        return;
-      }
-    }
-
-    // 3. Формируем объект для отправки на сервер
     const rec = {
       type_code: $('#m_type').value,
       model: $('#m_model').value.trim(),
       inv_number: $('#m_inv').value.trim(),
       serial_number: $('#m_serial').value.trim(),
       arm_name: $('#m_arm').value.trim(),
-      location: $('#m_loc').value.trim(), // Кабинет
+      location: $('#m_loc').value.trim(),
       status: $('#m_status').value,
       note: $('#m_note').value.trim(),
-      employee_id: employeeId // <--- ПЕРЕДАЕМ ID СОТРУДНИКА НА СЕРВЕР
+      employee_id: employeeId
     };
     
     if (!rec.model) { toast('Укажите модель', 'error'); return; }
@@ -1579,7 +1644,7 @@ async function openAssetModal(item, types) {
       
       closeModal();
       toast('Сохранено', 'ok');
-      renderAssets();
+      window.loadAssetsTable();
     } catch(ex) { toast(ex.message, 'error'); }
   };
 
@@ -1829,7 +1894,25 @@ async function renderEmployees(){
     }
   };
 }
-
+// Функция для разворачивания/сворачивания групп по АРМ
+window.toggleArm = function(armName) {
+  if (openArms.has(armName)) {
+    openArms.delete(armName);
+  } else {
+    openArms.add(armName);
+  }
+  // Вызываем функцию перерисовки таблицы (она должна быть глобальной или доступной)
+  if (typeof loadAssetsTable === 'function') {
+    loadAssetsTable();
+  } else {
+    // Если loadTable локальная, мы принудительно перерисовываем контент
+    const tb = document.getElementById('as_tbody');
+    if (tb) {
+       // Просто триггерим клик по скрытому элементу, чтобы обновить
+       // Но лучше вынести loadTable в глобальную область.
+    }
+  }
+};
 (async function start(){
   if(await tryAutoLogin()){ showApp(); bootApp(); } else { showLogin(); }
 })();

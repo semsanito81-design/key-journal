@@ -12,7 +12,8 @@ export default async function(app){
 
   // Получить список всей техники с фильтрами
   app.get('/', async (req) => {
-    const { search = '', status = '', type = '' } = req.query;
+    const search = req.query.q || req.query.search || '';
+    const { status = '', type = '' } = req.query;
     const cond = [], params = [];
 
     if(search) {
