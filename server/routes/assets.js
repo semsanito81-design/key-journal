@@ -28,10 +28,10 @@ export default async function(app){
     const { status = '', type = '' } = req.query;
     const cond = [], params = [];
 
-    if(search) {
+   /* if(search) {
       params.push(`%${search}%`);
       cond.push(`(a.inv_number ILIKE $${params.length} OR a.serial_number ILIKE $${params.length} OR a.model ILIKE $${params.length} OR a.arm_name ILIKE $${params.length})`);
-    }
+    }*/
     if(status) { params.push(status); cond.push(`a.status = $${params.length}`); }
     if(type) { params.push(type); cond.push(`a.type_code = $${params.length}`); }
 

@@ -603,11 +603,23 @@ async function renderJournal(){
 }
 
 async function loadAndDraw(){
-  try{
-    const raw = await API.carriers(filters);
-    journalData = raw.map(normCarrier);
+  try {
+    const raw = await API.carriers({ status: filters.status }); // Передаем только статус, поиск делаем локально
+    const allData = raw.map(normCarrier);
+    
+    // Фильтруем локально
+    const q = filters.q.toLowerCase().trim();
+    if (q) {
+      journalData = allData.filter(r => {
+        const text = `${r.employee} ${r.position} ${r.department} ${r.carrierSerial} ${r.carrierType}`.toLowerCase();
+        return text.includes(q);
+      });
+    } else {
+      journalData = allData;
+    }
+    
     drawJournalTable();
-  }catch(ex){ toast(ex.message,'error'); }
+  } catch(ex){ toast(ex.message,'error'); }
 }
 
 function drawJournalTable(){
@@ -1379,7 +1391,19 @@ window.loadAssetsTable = async () => {
   const status = document.getElementById('as_status')?.value || '';
   
   try {
-    assetsList = await API.assets({ q, type, status });
+    // Запрашиваем все данные, кроме поиска
+    const raw = await API.assets({ type, status });
+    
+    // Фильтруем локально по поисковой строке
+    const searchLower = q.toLowerCase().trim();
+    if (searchLower) {
+      assetsList = raw.filter(a => {
+        const text = `${a.model} ${a.inv_number} ${a.serial_number} ${a.arm_name} ${a.location}`.toLowerCase();
+        return text.includes(searchLower);
+      });
+    } else {
+      assetsList = raw;
+    }
     
     // Сортировка
     if (assetsList && assetsList.length > 0) {
@@ -1399,6 +1423,7 @@ window.loadAssetsTable = async () => {
     if (!assetsList || assetsList.length === 0) {
       tb.innerHTML = `<tr><td colspan="8" class="empty">Нет оборудования</td></tr>`;
     } else {
+      // ... (дальше идет код отрисовки, который у тебя уже есть, не трогай его)
       if (assetsViewMode === 'grouped') {
         // ГРУППИРОВКА ПО АРМ
         const groups = {};

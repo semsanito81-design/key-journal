@@ -9,7 +9,7 @@ export default async function(app){
   app.get('/', async (req)=>{
     const { q:search='', status='', carrier='', with:withParam='' } = req.query;
     const cond=[], params=[];
-    if(search){ 
+   /* if(search){ 
       // Если база не понимает LOWER(), используем ILIKE, который работает на уровне самого Postgres
       // Передаем запрос как есть (в нижнем регистре)
       params.push(`%${search.trim()}%`);
@@ -20,7 +20,7 @@ export default async function(app){
         carrier_serial ILIKE $${params.length} OR 
         carrier_type ILIKE $${params.length}
       )`); 
-    }
+    }*/
     if(carrier){ params.push(carrier); cond.push(`carrier_type=$${params.length}`); }
     const where = cond.length?'WHERE '+cond.join(' AND '):'';
     const { rows } = await q(
