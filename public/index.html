@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 :root{
   --bg:#f1f5f9;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;
@@ -231,6 +232,19 @@ th {
     transition:left .2s}
   .sidebar.open{left:0}
   .form{grid-template-columns:1fr}
+}
+
+/* Стили для наклеек */
+@media print {
+  @page { size: A4; margin: 5mm; }
+  body { background: #fff; }
+  #app, .topbar, .toolbar, .sidebar, .backdrop, .toast, .content { display: none !important; }
+  #printArea { display: block !important; }
+  .qr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5mm; page-break-inside: avoid; }
+  .qr-label { border: 1px solid #000; padding: 4mm; display: flex; align-items: center; gap: 4mm; page-break-inside: avoid; }
+  .qr-label canvas, .qr-label img {width: 25mm; height: 25mm; }
+  .qr-text { font-size: 10pt; line-height: 1.2; }
+  .qr-text b { font-size: 12pt; }
 }
 </style>
 </head>
@@ -1441,6 +1455,7 @@ window.loadAssetsTable = async () => {
           const arrow = isOpen ? '▼' : '▶';
           
           html += `<tr class="group-header" style="background:#f8fafc; border-top: 2px solid var(--line); cursor: pointer;" onclick="event.stopPropagation(); toggleArm('${esc(arm)}')">
+            <td></td>
             <td colspan="2"><b>${arrow} 🖥️ ${esc(arm)}</b></td>
             <td colspan="3"><b>${locText}</b></td>
             <td colspan="2" style="text-align:right; color:var(--muted); font-size:12px;">Техники: ${items.length}</td>
@@ -1455,12 +1470,14 @@ window.loadAssetsTable = async () => {
               if (a.status === 'written_off') stBadge = '<span class="badge expired">Списано</span>';
               
               return `<tr style="background:#fff;">
+                <td><input type="checkbox" class="as-checkbox" data-id="${a.id}"></td>
                 <td style="padding-left:20px; color:var(--muted);">└ ${esc(a.type_code)}</td>
                 <td>${esc(a.model)}</td>
                 <td class="num">${esc(a.inv_number || '—')}</td>
                 <td class="num">${esc(a.serial_number || '—')}</td>
                 <td>${esc(a.arm_name)}</td>
-                <td>${stBadge}</td>
+                <td>${esc(a.location || '—')}</td>
+                <td>${stBadge}</td>                
                 <td>
                   ${can('admin,operator') ? `
                     <button class="btn sm" data-act="edit" data-id="${a.id}">✏️</button>
@@ -1485,6 +1502,7 @@ window.loadAssetsTable = async () => {
           }
 
           return `<tr style="${rowStyle}">
+            <td><input type="checkbox" class="as-checkbox" data-id="${a.id}"></td>
             <td><b>${esc(a.type_code)}</b></td>
             <td>${esc(a.model)}</td>
             <td class="num">${esc(a.inv_number || '—')}</td>
@@ -1536,12 +1554,14 @@ async function renderAssets() {
       </label>
       <span class="spacer"></span>
       ${can('admin,operator') ? `<button class="btn primary" id="as_add">➕ Добавить</button>` : ''}
+      <button class="btn" id="as_print_qr">🖨 Наклейки</button>
       <span id="as_stat" style="color:var(--muted); margin-left: 10px;"></span>
     </div>
     <div class="table-wrap" style="max-height: calc(100vh - 180px); overflow-y: auto;">
       <table>
         <thead>
           <tr>
+            <th style="width: 30px;"><input type="checkbox" id="as_check_all"></th>
             <th data-key="type_code" style="cursor:pointer;">Тип</th>
             <th data-key="model" style="cursor:pointer;">Модель</th>
             <th data-key="inv_number" style="cursor:pointer;">Инв. №</th>
@@ -1568,14 +1588,23 @@ async function renderAssets() {
 
   if($('#as_add')) {
     $('#as_add').onclick = () => openAssetModal(null, types);
-  }
-
+  };
+  if($('#as_print_qr')) {
+    $('#as_print_qr').onclick = printQRLabels;
+  };
   $$('th[data-key]').forEach(th => {
     th.onclick = () => {
       const key = th.dataset.key;
       if (assetSortKey === key) assetSortDesc = !assetSortDesc;
       else { assetSortKey = key; assetSortDesc = false; }
       window.loadAssetsTable();
+    };
+    // Выбрать все
+    $('#as_check_all').onchange = (e) => {
+      const isChecked = e.target.checked;
+      document.querySelectorAll('.as-checkbox').forEach(cb => {
+        cb.checked = isChecked;
+      });
     };
   });
 
@@ -1949,6 +1978,78 @@ async function renderEmployees(){
       }
     }
   };
+}
+function getAsciiType(typeCode) {
+  const map = {
+    'СБ': 'SB',
+    'Монитор': 'MON',
+    'МФУ': 'MFP',
+    'Принтер': 'PRN',
+    'Сканер': 'SCN',
+    'Ноутбук': 'NB',
+    'Сетевое': 'NET',
+    'Прочее': 'OTHER'
+  };
+  return map[typeCode] || 'UNKNOWN';
+}
+async function printQRLabels() {
+  const checkedBoxes = document.querySelectorAll('.as-checkbox:checked');
+  
+  if (checkedBoxes.length === 0) {
+    toast('Выберите хотя бы одно оборудование для печати', 'error');
+    return;
+  }
+
+  const checkedIds = Array.from(checkedBoxes).map(cb => cb.dataset.id);
+  const itemsToPrint = assetsList.filter(a => checkedIds.includes(a.id));
+
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = '<div class="qr-grid" id="qr-container"></div>';
+  
+  const container = document.getElementById('qr-container');
+  
+  for (const item of itemsToPrint) {
+    const div = document.createElement('div');
+    div.className = 'qr-label';
+    
+    const qrDiv = document.createElement('div');
+    qrDiv.id = 'qr_' + item.id;
+    
+    const textDiv = document.createElement('div');
+    textDiv.className = 'qr-text';
+    
+    // Очищаем от невидимых символов и приводим к строке
+    const cleanStr = (s) => String(s || '').replace(/[^\x20-\x7EА-Яа-яЁё]/g, '').trim() || '—';
+    const inv = cleanStr(item.inv_number);
+    const sn = cleanStr(item.serial_number);
+    const type = cleanStr(item.type_code);   
+    const qrText = `INV:${inv}|SN:${sn}|TYPE:${getAsciiType(type)}`;
+    
+    new QRCode(qrDiv, {
+      text: qrText,
+      width: 128,
+      height: 128,
+      colorDark : "#000000",
+      colorLight : "#ffffff",
+      correctLevel : QRCode.CorrectLevel.M
+    });
+    
+    textDiv.innerHTML = `
+      <b>${esc(item.model)}</b><br>
+      Инв: ${esc(inv)}<br>
+      S/N: ${esc(sn)}<br>
+      Тип: ${esc(type)}<br>
+      АРМ: ${esc(item.arm_name || '—')}
+    `;
+    
+    div.appendChild(qrDiv);
+    div.appendChild(textDiv);
+    container.appendChild(div);
+  }
+  
+  setTimeout(() => {
+    window.print();
+  }, 500);
 }
 // Функция для разворачивания/сворачивания групп по АРМ
 window.toggleArm = function(armName) {
