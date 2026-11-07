@@ -93,10 +93,20 @@ export default async function(app){
       
     const newData = rows[0];
 
-    // 3. Сравниваем и пишем в историю (только если изменились ключевые поля)
+    // 3. Сравниваем и пишем в историю
     const changes = [];
+    
+    // Функция для получения ФИО по ID
+    const getName = async (id) => {
+      if (!id) return '—';
+      const { rows } = await q('SELECT full_name FROM employees WHERE id = $1', [id]);
+      return rows[0] ? rows[0].full_name : id; // Если не нашли, вернем ID
+    };
+
     if (oldData.employee_id !== newData.employee_id) {
-      changes.push(`Сотрудник: ${oldData.employee_id || '—'} → ${newData.employee_id || '—'}`);
+      const oldName = await getName(oldData.employee_id);
+      const newName = await getName(newData.employee_id);
+      changes.push(`Сотрудник: ${oldName} → ${newName}`);
     }
     if (oldData.arm_name !== newData.arm_name) {
       changes.push(`АРМ: ${oldData.arm_name || '—'} → ${newData.arm_name || '—'}`);

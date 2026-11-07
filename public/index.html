@@ -1678,9 +1678,9 @@ async function openAssetModal(item, types) {
       <label>Серийный номер<input id="m_serial" value="${esc(item?.serial_number)}"></label>
       <label>АРМ<input id="m_arm" value="${esc(item?.arm_name)}"></label>
       <label>Сотрудник
-        <input id="m_employee_search" list="emp_list_assets" placeholder="Начните вводить ФИО..." value="${esc(item?.employee_name || '')}">
+        <input id="m_employee_search" list="emp_list_assets" placeholder="Начните вводить ФИО..." value="${esc(item?.employee_name || '')}" autocomplete="off">
         <datalist id="emp_list_assets">
-          ${employees.map(e => `<option value="${esc(e.full_name)}">${esc(e.position||'')}</option>`).join('')}
+          ${employees.map(e => `<option value="${esc(e.full_name)}"></option>`).join('')}
         </datalist>
       </label>
       <label>Место (кабинет)<input id="m_loc" value="${esc(item?.location)}"></label>
