@@ -5,7 +5,10 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "migrate": "node server/migrations/run.js"
+    "migrate:legacy": "node server/migrations/run.js",
+    "migrate": "node-pg-migrate",
+    "migrate:up": "node-pg-migrate up",
+    "migrate:down": "node-pg-migrate down"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",
@@ -17,5 +20,8 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "node-pg-migrate": "^9.0.0"
   }
 }
