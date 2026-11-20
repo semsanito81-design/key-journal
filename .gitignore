@@ -1,10 +1,12 @@
 # Зависимости
 node_modules/
+backups/
 
 # Секреты и локальные настройки
 .env
 .env.local
 .env.example
+backup.bat
 
 # Логи и временные файлы
 *.sql

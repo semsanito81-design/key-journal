@@ -14,6 +14,8 @@ import certRoutes from './routes/certificates.js';
 import employeeRoutes from './routes/employees.js';
 import exportRoutes from './routes/export.js';
 import assetRoutes from './routes/assets.js';
+import calendarRoutes from './routes/calendar.js';
+import vacationRoutes from './routes/vacations.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,6 +35,8 @@ app.register(certRoutes, { prefix:'/api/certificates' });
 app.register(employeeRoutes, { prefix: '/api/employees' });
 app.register(exportRoutes, { prefix: '/api/export' });
 app.register(assetRoutes, { prefix: '/api/assets' });
+app.register(calendarRoutes, { prefix: '/api/calendar' });
+app.register(vacationRoutes, { prefix: '/api/vacations' });
 
 app.setErrorHandler((err,req,reply)=>{
   app.log.error(err);

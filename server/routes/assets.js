@@ -50,14 +50,24 @@ export default async function(app){
   app.post('/', { preHandler: requireRole('admin', 'operator') }, async (req, reply) => {
     const b = req.body;
     if(!b.model || !b.type_code) return reply.code(400).send({ error: 'Модель и категория обязательны' });
+
+    let rows;
+    try {
+      ({ rows } = await q(`
+        INSERT INTO assets (inv_number, serial_number, type_code, model, status, arm_name, employee_id, location, note)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [b.inv_number||null, b.serial_number||null, b.type_code, b.model, b.status||'active', b.arm_name||null, b.employee_id||null, b.location||null, b.note||null]));
+    } catch (e) {
+      if (e.code === '23505') {
+        return reply.code(409).send({
+          error: b.serial_number
+            ? `Актив с серийным номером «${b.serial_number}» уже существует в системе`
+            : 'Нарушено ограничение уникальности',
+        });
+      }
+      throw e;
+    }
     
-    const { rows } = await q(`
-      INSERT INTO assets (inv_number, serial_number, type_code, model, status, arm_name, employee_id, location, note)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [b.inv_number||null, b.serial_number||null, b.type_code, b.model, b.status||'active', b.arm_name||null, b.employee_id||null, b.location||null, b.note||null]);
-    
-    // Запись в историю
-    // Запись в историю о создании
     await q(`
       INSERT INTO asset_history (asset_id, action, comment, employee_id)
       VALUES ($1, 'created', 'Добавлено в систему', $2)
@@ -65,6 +75,8 @@ export default async function(app){
              
     return rows[0];
   });
+    
+   
 
   // 4. Обновить данные техники
   app.patch('/:id', { preHandler: requireRole('admin', 'operator') }, async (req, reply) => {
@@ -76,21 +88,33 @@ export default async function(app){
     const oldData = oldRows[0];
 
     // 2. Обновляем
-    const { rows } = await q(`
-      UPDATE assets SET
-        inv_number = COALESCE($1, inv_number),
-        serial_number = COALESCE($2, serial_number),
-        type_code = COALESCE($3, type_code),
-        model = COALESCE($4, model),
-        status = COALESCE($5, status),
-        arm_name = COALESCE($6, arm_name),
-        employee_id = COALESCE($7, employee_id),
-        location = COALESCE($8, location),
-        note = COALESCE($9, note),
-        updated_at = now()
-      WHERE id = $10 RETURNING *`,
-      [b.inv_number, b.serial_number, b.type_code, b.model, b.status, b.arm_name, b.employee_id || null, b.location, b.note, req.params.id]);
-      
+    let rows;
+    try {
+      ({ rows } = await q(`
+        UPDATE assets SET
+          inv_number = COALESCE($1, inv_number),
+          serial_number = COALESCE($2, serial_number),
+          type_code = COALESCE($3, type_code),
+          model = COALESCE($4, model),
+          status = COALESCE($5, status),
+          arm_name = COALESCE($6, arm_name),
+          employee_id = COALESCE($7, employee_id),
+          location = COALESCE($8, location),
+          note = COALESCE($9, note),
+          updated_at = now()
+        WHERE id = $10 RETURNING *`,
+        [b.inv_number, b.serial_number, b.type_code, b.model, b.status, b.arm_name, b.employee_id || null, b.location, b.note, req.params.id]));
+    } catch (e) {
+      if (e.code === '23505') {
+        return reply.code(409).send({
+          error: b.serial_number
+            ? `Актив с серийным номером «${b.serial_number}» уже существует в системе`
+            : 'Нарушено ограничение уникальности',
+        });
+      }
+      throw e;
+    }
+    
     const newData = rows[0];
 
     // 3. Сравниваем и пишем в историю

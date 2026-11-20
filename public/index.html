@@ -203,12 +203,63 @@ th {
 
 /* PRINT */
 @media print {
-  @page { size: A4 landscape; margin: 10mm; } /* Горизонтальная ориентация и отступы 1 см */
+  @page { size: A4 landscape; margin: 10mm;   
+  .cal-print { font-family: 'Times New Roman', serif; color: #000; font-size: 10px; }
+  .cal-print h1 { font-size: 16px; text-align: center; margin: 0 0 8px; text-transform: uppercase; }
+  .cal-print h2 { font-size: 13px; margin: 10px 0 5px; }
+  .cal-print h3 { font-size: 11px; margin: 6px 0 3px; }
+
+  .cal-months {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 4mm; margin-bottom: 6mm;
+  }
+  .cal-month { page-break-inside: avoid; border: 1px solid #000; padding: 2mm; }
+  .cal-month-name { font-weight: bold; text-align: center; text-transform: capitalize; margin-bottom: 2px; font-size: 10px; }
+  .cal-month table { width: 100%; border-collapse: collapse; }
+  .cal-month th { font-size: 8px; font-weight: normal; color: #666; padding: 1px; text-align: center; }
+  .cal-month td { text-align: center; padding: 1px; font-size: 9px; border: 1px solid #eee; }
+  .cal-month td.w { background: #f0f0f0; color: #666; }
+  .cal-month td.h { background: #ffe0e0; color: #a00; font-weight: bold; }
+  .cal-month td.s { background: #fff3d0; }
+  .cal-month td.v { text-decoration: underline; }
+
+  .cal-norm { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 4mm; }
+  .cal-norm th, .cal-norm td { border: 1px solid #000; padding: 2px 4px; }
+  .cal-norm th { background: #eee; text-align: center; }
+  .cal-norm td.num { text-align: right; }
+  .cal-norm tr.total td { background: #f5f5f5; }
+
+  .cal-lists { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .cal-lists ul { margin: 0; padding-left: 14px; font-size: 9px; line-height: 1.4; }
+  .cal-lists li { margin-bottom: 1px; }
+
+  .cal-footer { margin-top: 6mm; font-size: 8px; color: #666; text-align: right; }} /* Горизонтальная ориентация и отступы 1 см */
   body { background: #fff; font-size: 12px; color: #000; }
   #app, .topbar, .toolbar, .sidebar, .backdrop, .toast, .content { display: none !important; }
   
   #printArea { display: block !important; width: 100%; padding: 0; }
-  .act { font-family: 'Times New Roman', serif; color: #000; }
+  .act { font-family: 'Times New Roman', serif; color: #000; 
+  /* Общие настройки для календаря */
+  .cal-print-page {
+    page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Сетка для двух месяцев на одной странице */
+  .cal-print-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+  }
+
+  /* Таблицы в печатном календаре */
+  .cal-print .cal-month { border: 1px solid #000; padding: 2mm; }
+  .cal-print .cal-month-name { font-weight: bold; text-align: center; font-size: 12pt; margin-bottom: 2px; }
+  .cal-print table { width: 100%; border-collapse: collapse; }
+  .cal-print th, .cal-print td { border: 1px solid #999; padding: 1px; text-align: center; font-size: 9pt; }
+  }
   .act h1 { font-size: 18px; text-align: center; margin: 0 0 15px; text-transform: uppercase; }
   .act p { margin: 5px 0; }
   
@@ -270,6 +321,7 @@ th {
       <a href="#journal" data-view="journal">📋 Журнал</a>
       <a href="#assets" data-view="assets">🖥️ Оборудование</a>      
       <a href="#employees" data-view="employees">👤 Сотрудники</a>
+      <a href="#calendar" data-view="calendar">📅 Календарь</a>
       <a href="#types" data-view="types" data-role="admin">🏷 Типы сертификатов</a>
       <a href="#users" data-view="users" data-role="admin">👥 Пользователи</a>
       <a href="#audit" data-view="audit" data-role="admin,auditor">📜 Аудит-лог</a>
@@ -367,6 +419,15 @@ const API = {
   audit:(limit=500)=>API.req('GET','/api/audit?limit='+limit),
 
   assetHistory:(id)=>API.req('GET','/api/assets/'+id+'/history'),
+
+  calendarYears:()=>API.req('GET','/api/calendar/years'),
+  calendar:(year)=>API.req('GET','/api/calendar/'+year),
+  seedCalendar:(year)=>API.req('POST','/api/calendar/'+year+'/seed'),
+  deleteCalendar:(year)=>API.req('DELETE','/api/calendar/'+year),
+  vacations:(f={})=>API.req('GET','/api/vacations?'+new URLSearchParams(f)),
+  addVacation:(v)=>API.req('POST','/api/vacations',v),
+  updVacation:(id,v)=>API.req('PATCH','/api/vacations/'+id,v),
+  delVacation:(id)=>API.req('DELETE','/api/vacations/'+id),
 };
 
 /* ============================================================
@@ -488,21 +549,22 @@ function bootApp(){
 async function route(){
   const h = location.hash.replace('#','') || 'journal';
   const allowed = {
-    dashboard:()=>true, journal:()=>true, assets:()=>true, employees:()=>true, profile:()=>true,
+    dashboard:()=>true, journal:()=>true, assets:()=>true, employees:()=>true, calendar:()=>true, profile:()=>true,
     types:()=>can('admin'), users:()=>can('admin'), audit:()=>can('admin,auditor')
   };
   if(!allowed[h] || !allowed[h]()){ location.hash='journal'; return; }
   currentView = h;
   $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===h));
   const titles = {dashboard:'Дашборд',journal:'Журнал',assets:'Оборудование',employees:'Сотрудники',types:'Типы сертификатов',
-                  users:'Пользователи',audit:'Аудит-лог',profile:'Профиль'};
+                  users:'Пользователи',audit:'Аудит-лог',profile:'Профиль',calendar:'Производственный календарь'};
   $('#viewTitle').textContent = titles[h]||'';
   await renderTopbarActions();
   try{
     if(h==='dashboard') await renderDashboard();
     if(h==='journal')   await renderJournal();
     if(h==='assets') await renderAssets();
-    if(h==='employees') await renderEmployees();    
+    if(h==='employees') await renderEmployees();
+    if(h==='calendar')  await renderCalendar();    
     if(h==='types')     await renderTypes();
     if(h==='users')     await renderUsers();
     if(h==='audit')     await renderAudit();
@@ -1197,6 +1259,294 @@ function printJournal(){
   window.print();
 }
 
+function computeMonthNorm(year, monthIdx){
+  const first = new Date(Date.UTC(year, monthIdx, 1));
+  const last  = new Date(Date.UTC(year, monthIdx + 1, 0));
+  const daysInMonth = last.getUTCDate();
+  let workDays = 0, weekendDays = 0;
+  const hours40 = { base: 0 }; // считаем ниже
+  let h40 = 0, h36 = 0, h24 = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(monthIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const info = calDays[iso] || { type: 'work' };
+    const dow = new Date(Date.UTC(year, monthIdx, d)).getUTCDay();
+    if (info.type === 'work' || info.type === 'short') {
+      workDays++;
+      if (info.type === 'short') { h40 += 7; h36 += 6.3; h24 += 4.2; }
+      else                       { h40 += 8; h36 += 7.2; h24 += 4.8; }
+    } else {
+      weekendDays++;
+    }
+  }
+  return {
+    name: first.toLocaleDateString('ru-RU', { month: 'long' }),
+    calendarDays: daysInMonth,
+    workDays, weekendDays,
+    hours40: h40, hours36: +h36.toFixed(1), hours24: +h24.toFixed(1),
+  };
+}
+
+function renderMonthForPrint(year, monthIdx){
+  const first = new Date(Date.UTC(year, monthIdx, 1));
+  const last  = new Date(Date.UTC(year, monthIdx + 1, 0));
+  const startDow = (first.getUTCDay() + 6) % 7; // пн=0
+  const daysInMonth = last.getUTCDate();
+  const monthName = first.toLocaleDateString('ru-RU', { month: 'long' });
+
+  let cells = '';
+  for (let i = 0; i < startDow; i++) cells += `<td></td>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(monthIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const info = calDays[iso] || { type: 'work' };
+    const cls = info.type === 'holiday' ? 'h' : info.type === 'dayoff' ? 'w' : info.type === 'short' ? 's' : '';
+    const vac = vacations.some(v => v.date_from <= iso && v.date_to >= iso);
+    cells += `<td class="${cls}${vac ? ' v' : ''}">${d}</td>`;
+  }
+  // добить до конца недели
+  const totalCells = startDow + daysInMonth;
+  const tail = (7 - (totalCells % 7)) % 7;
+  for (let i = 0; i < tail; i++) cells += `<td></td>`;
+
+  // разбить на строки по 7
+  const arr = cells.match(/<td[^>]*>.*?<\/td>/g) || [];
+  let rows = '';
+  for (let i = 0; i < arr.length; i += 7) {
+    rows += `<tr>${arr.slice(i, i+7).join('')}</tr>`;
+  }
+
+  return `<div class="cal-month">
+    <div class="cal-month-name">${esc(monthName)}</div>
+    <table>
+      <thead><tr>
+        <th>Пн</th><th>Вт</th><th>Ср</th><th>Чт</th><th>Пт</th><th>Сб</th><th>Вс</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+// === Экспорт списка отпусков (простая таблица) ===
+function exportVacationsExcel() {
+  const yearVacs = vacations.filter(v =>
+    v.date_from.slice(0,4) <= String(calYear) && v.date_to.slice(0,4) >= String(calYear)
+  );
+  if (!yearVacs.length) { toast('Нет отпусков за ' + calYear + ' год', 'error'); return; }
+
+  const rows = yearVacs.map(v => {
+    const d1 = new Date(v.date_from), d2 = new Date(v.date_to);
+    return {
+      'Сотрудник': v.employee_name || '',
+      'Должность': v.position || '',
+      'Подразделение': v.department || '',
+      'С': fmtDate(v.date_from),
+      'По': fmtDate(v.date_to),
+      'Дней': Math.round((d2 - d1) / 86400000) + 1,
+      'Вид': { annual:'Ежегодный', unpaid:'Без сохр. з/п', sick:'Больничный', study:'Учебный', other:'Другое' }[v.kind] || v.kind,
+      'Примечание': v.note || '',
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  // Ширины колонок
+  ws['!cols'] = [
+    { wch: 30 }, { wch: 30 }, { wch: 30 },
+    { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 30 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, `Отпуска ${calYear}`);
+  XLSX.writeFile(wb, `Отпуска_${calYear}.xlsx`);
+}
+
+// === Экспорт графика (сетка: сотрудники × месяцы, как в Excel) ===
+function exportScheduleExcel() {
+  const yearVacs = vacations.filter(v =>
+    v.date_from.slice(0,4) <= String(calYear) && v.date_to.slice(0,4) >= String(calYear)
+  );
+  if (!yearVacs.length) { toast('Нет отпусков за ' + calYear + ' год', 'error'); return; }
+
+  // Уникальные сотрудники в порядке появления
+  const empIds = [...new Set(yearVacs.map(v => v.employee_id))];
+  const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+
+  // Заголовок
+  const header = ['Сотрудник', 'Должность', 'Подразделение', 'С', 'По', 'Дней', 'Вид', ...monthNames];
+  const rows = [header];
+
+  for (const empId of empIds) {
+    const empVacs = yearVacs.filter(v => v.employee_id === empId)
+      .sort((a,b) => a.date_from.localeCompare(b.date_from));
+    const emp = empVacs[0];
+
+    empVacs.forEach((v, idx) => {
+      const d1 = new Date(v.date_from), d2 = new Date(v.date_to);
+      const days = Math.round((d2 - d1) / 86400000) + 1;
+      const row = idx === 0
+        ? [emp.employee_name || '', emp.position || '', emp.department || '', fmtDate(v.date_from), fmtDate(v.date_to), days, v.kind]
+        : ['', '', '', fmtDate(v.date_from), fmtDate(v.date_to), days, v.kind];
+
+      // Для каждого месяца — сколько дней отпуска попало в этот месяц
+      for (let m = 0; m < 12; m++) {
+        const mStart = new Date(Date.UTC(calYear, m, 1));
+        const mEnd   = new Date(Date.UTC(calYear, m + 1, 0));
+        const vf = new Date(v.date_from), vt = new Date(v.date_to);
+        const from = vf > mStart ? vf : mStart;
+        const to   = vt < mEnd   ? vt : mEnd;
+        if (from > to) { row.push(''); continue; }
+        const cnt = Math.round((to - from) / 86400000) + 1;
+        row.push(cnt);
+      }
+      rows.push(row);
+    });
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [
+    { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 12 },
+    ...Array(12).fill({ wch: 6 }),
+  ];
+
+  // Цветные заголовки
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let C = range.s.c; C <= range.e.c; ++C) {
+    const cell = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+    if (cell) {
+      cell.s = {
+        font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+        fill: { patternType: 'solid', fgColor: { rgb: 'FF2563EB' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      };
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `График ${calYear}`);
+  XLSX.writeFile(wb, `График_отпусков_${calYear}.xlsx`);
+}
+
+function printCalendar(){
+  const year = calYear;
+  const norms = computeNorm(calDays);
+
+  // 1. Собираем месяцы (используем твою функцию renderMonthForPrint)
+  const monthBlocks = Array.from({length:12}, (_, i) => renderMonthForPrint(year, i));
+  
+  // Группируем по 2 (или по 4, если хочешь по 4 на страницу)
+  const pages = [];
+  for (let i = 0; i < 12; i += 2) {
+    pages.push(`
+      <div class="cal-print-page">
+        <div class="cal-print-grid">
+          ${monthBlocks[i]}
+          ${monthBlocks[i+1] || ''}
+        </div>
+      </div>
+    `);
+  }
+
+  // 2. Сводная таблица (нормы и праздники)
+  const monthNormRows = Array.from({length:12}, (_, i) => {
+    const m = computeMonthNorm(year, i);
+    return `<tr>
+      <td style="text-align:left">${m.name}</td>
+      <td>${m.calendarDays}</td>
+      <td>${m.workDays}</td>
+      <td>${m.weekendDays}</td>
+      <td>${m.hours40}</td>
+      <td>${m.hours36}</td>
+      <td>${m.hours24}</td>
+    </tr>`;
+  }).join('');
+
+  const yearTotals = Array.from({length:12}, (_,i)=>computeMonthNorm(year,i))
+    .reduce((a,m)=>({
+      h40: a.h40 + m.hours40,
+      h36: a.h36 + m.hours36,
+      h24: a.h24 + m.hours24,
+      work: a.work + m.workDays,
+    }), {h40:0,h36:0,h24:0, work:0});
+
+  const holidays = Object.entries(calDays)
+    .filter(([, d]) => d.type === 'holiday')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, d]) => `<li><b>${fmtDate(date)}</b> — ${esc(d.name || '')}</li>`)
+    .join('');
+
+  const shortDays = Object.entries(calDays)
+    .filter(([, d]) => d.type === 'short')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, d]) => `<li><b>${fmtDate(date)}</b> — ${esc(d.name || '')}</li>`)
+    .join('');
+
+  const extraOff = Object.entries(calDays)
+    .filter(([date, d]) => d.type === 'dayoff' && d.name)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, d]) => `<li><b>${fmtDate(date)}</b> — ${esc(d.name)}</li>`)
+    .join('');
+
+  pages.push(`
+    <div class="cal-print-page" style="page-break-before: always;">
+      <h1 style="text-align:center; font-size: 20px;">Сводные данные на ${year} год</h1>
+      
+      <h2 style="margin-top:20px">Нормы рабочего времени</h2>
+      <table style="width:100%; border-collapse:collapse; border:1px solid #000; font-size: 10pt;">
+        <thead>
+          <tr style="background:#eee;">
+            <th style="border:1px solid #000; padding:4px;">Месяц</th>
+            <th style="border:1px solid #000; padding:4px;">Календарных</th>
+            <th style="border:1px solid #000; padding:4px;">Рабочих</th>
+            <th style="border:1px solid #000; padding:4px;">Выходных</th>
+            <th style="border:1px solid #000; padding:4px;">40 ч</th>
+            <th style="border:1px solid #000; padding:4px;">36 ч</th>
+            <th style="border:1px solid #000; padding:4px;">24 ч</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${monthNormRows}
+          <tr style="font-weight:bold; background:#f9f9f9;">
+            <td style="border:1px solid #000; padding:4px;">${year} год</td>
+            <td style="border:1px solid #000; padding:4px;">365</td>
+            <td style="border:1px solid #000; padding:4px;">${yearTotals.work}</td>
+            <td style="border:1px solid #000; padding:4px;">${365 - yearTotals.work}</td>
+            <td style="border:1px solid #000; padding:4px;">${yearTotals.h40}</td>
+            <td style="border:1px solid #000; padding:4px;">${yearTotals.h36.toFixed(1)}</td>
+            <td style="border:1px solid #000; padding:4px;">${yearTotals.h24.toFixed(1)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-top: 10mm;">
+        <div>
+          <h3>Праздничные дни</h3>
+          <ul style="padding-left: 20px;">${holidays || '<li>—</li>'}</ul>
+        </div>
+        <div>
+          <h3>Сокращённые дни</h3>
+          <ul style="padding-left: 20px;">${shortDays || '<li>—</li>'}</ul>
+        </div>
+      </div>
+
+      <div style="margin-top: 10mm;">
+        <h3>Дополнительные выходные</h3>
+        <ul style="padding-left: 20px;">${extraOff || '<li>—</li>'}</ul>
+      </div>
+      
+      <p style="margin-top: 20mm; font-size: 10pt; color:#666; text-align:right;">
+        Сформировано: ${new Date().toLocaleString('ru-RU')}<br>
+        Сотрудник: ${esc(session.fullName)}
+      </p>
+    </div>
+  `);
+
+  // 3. Выводим и печатаем
+  $('#printArea').innerHTML = `<div class="cal-print">${pages.join('')}</div>`;
+  
+  // Даем браузеру время отрисовать
+  setTimeout(() => {
+    window.print();
+  }, 300);
+}
+
 async function renderDashboard(){
   let certs, carriers;
   try{ certs = await API.certs(); carriers = await API.carriers(); }catch(ex){ toast(ex.message,'error'); return; }
@@ -1299,6 +1649,498 @@ async function renderDashboard(){
       showDashboardDetails('Истекшие', filteredList);
     }
   };
+}
+
+let calYear = 2027;
+let calDays = {};      // { '2027-01-01': {type, name} }
+let vacations = [];    // [{id, employee_id, date_from, date_to, ...}]
+
+async function renderCalendar(){
+  $('#content').innerHTML = `<div class="empty">Загрузка…</div>`;
+  try {
+    const [days, vacs, years] = await Promise.all([
+      API.calendar(calYear),
+      API.vacations({ year: calYear }),
+      API.calendarYears(),
+    ]);
+    calDays = Object.fromEntries(days.map(d => [d.date, d]));
+    vacations = vacs;
+
+        // Если года нет в БД — предложить залить
+    if (!days.length) {
+      $('#content').innerHTML = `
+        <div class="empty" style="padding:40px;text-align:center">
+          <p>Календарь на <b>${calYear}</b> не загружен.</p>
+          ${can('admin') 
+            ? `<button class="btn primary" id="seedBtn" style="margin-top:12px">🔄 Сгенерировать базовый календарь на ${calYear}</button>
+               <p style="font-size:12px;color:var(--muted);margin-top:8px">Будут созданы все дни года: пн–пт — рабочие, сб–вс — выходные.<br>
+               Праздники и сокращённые дни можно поправить вручную после генерации.</p>`
+            : `<p style="color:var(--muted)">Обратитесь к администратору для загрузки календаря.</p>`}
+        </div>`;
+      
+      if ($('#seedBtn')) {
+        $('#seedBtn').onclick = async () => {
+          try {
+            $('#seedBtn').disabled = true;
+            $('#seedBtn').textContent = 'Генерация...';
+            const r = await API.seedCalendar(calYear);
+            toast(`Создано ${r.count} дней на ${calYear}`, 'ok');
+            renderCalendar();
+          } catch(ex) { 
+            toast(ex.message, 'error'); 
+            $('#seedBtn').disabled = false;
+            $('#seedBtn').textContent = `🔄 Сгенерировать базовый календарь на ${calYear}`;
+          }
+        };
+      }
+      return;
+    }
+
+    // Селектор года
+    const yearOpts = years.length ? years : [calYear];
+    if (!yearOpts.includes(calYear)) yearOpts.push(calYear);
+
+    // Карточки норм
+    const norms = computeNorm(calDays);
+
+    // 12 месяцев (используем renderMonth, который мы написали)
+    const monthsHtml = Array.from({length:12}, (_, i) => renderMonth(calYear, i)).join('');
+
+    $('#content').innerHTML = `
+      <div class="toolbar">
+        <div style="display:flex; gap:4px; align-items:center;">
+          <select id="cal_year">
+            ${[...new Set(yearOpts)].sort((a,b)=>b-a).map(y =>
+              `<option ${y===calYear?'selected':''}>${y}</option>`).join('')}
+          </select>
+          ${can('admin') ? `<button class="btn sm" id="cal_addYear" title="Добавить год">➕</button>` : ''}
+        </div>
+        <span class="spacer"></span>
+        ${can('admin,operator') ? `<button class="btn primary" id="cal_addVac">➕ Отпуск</button>` : ''}
+        <button class="btn" id="cal_export_vac" style="background:#16a34a;color:#fff;border:none">📊 Отпуска (Excel)</button>
+        <button class="btn" id="cal_export_sched" style="background:#16a34a;color:#fff;border:none">📊 График (Excel)</button>
+        <button class="btn" id="cal_print">🖨 Печать</button>
+        ${can('admin') ? `<button class="btn danger" id="cal_delYear" title="Удалить календарь за ${calYear}">🗑 Удалить год</button>` : ''}
+      </div>
+
+      <div class="cards">
+        <div class="card"><div class="label">Рабочих дней</div><div class="value">${norms.work}</div></div>
+        <div class="card"><div class="label">Выходных</div><div class="value">${norms.off}</div></div>
+        <div class="card"><div class="label">Праздников</div><div class="value">${norms.holiday}</div></div>
+        <div class="card"><div class="label">Сокращённых</div><div class="value">${norms.short}</div></div>
+      </div>
+
+      <div id="monthsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+        ${monthsHtml}
+      </div>
+    `;
+
+    // === ОБРАБОТЧИКИ (ВАЖНО: они навешиваются ПОСЛЕ innerHTML) ===
+    $('#cal_year').onchange = (e) => {
+      calYear = +e.target.value;
+      renderCalendar();
+    };
+
+    if ($('#cal_addYear')) {
+      $('#cal_addYear').onclick = () => {
+        const y = prompt('Введите год (например, 2028):');
+        if (y && /^\d{4}$/.test(y) && +y >= 2000 && +y <= 2100) {
+          calYear = +y;
+          renderCalendar();
+        } else if (y) {
+          toast('Некорректный год', 'error');
+        }
+      };
+    }
+
+    $('#cal_year').onchange = (e) => { calYear = +e.target.value; renderCalendar(); };
+    
+    if ($('#cal_addVac')) $('#cal_addVac').onclick = () => openVacationModal(null);
+    
+    // Обработчики кнопок Excel
+    if ($('#cal_export_vac')) $('#cal_export_vac').onclick = () => exportVacationsExcel();
+    if ($('#cal_export_sched')) $('#cal_export_sched').onclick = () => exportScheduleExcel();
+    if ($('#cal_print')) $('#cal_print').onclick = () => printCalendar();
+
+    if ($('#cal_delYear')) {
+      $('#cal_delYear').onclick = async () => {
+        if (!confirm(`Удалить календарь за ${calYear} год?\n\nВсе дни и праздники будут удалены. Отпуска сотрудников останутся.`)) return;
+        try {
+          await API.deleteCalendar(calYear);
+          toast('Календарь удалён', 'ok');
+          // После удаления текущего года — переключаемся на предыдущий, если есть
+          const remainingYears = (await API.calendarYears()).filter(y => y !== calYear);
+          if (remainingYears.length) {
+            calYear = Math.max(...remainingYears);
+          }
+          renderCalendar();
+        } catch(ex) { 
+          toast(ex.message, 'error'); 
+        }
+      };
+    }
+
+    // Клик по полосе отпуска или по дню
+    $('#monthsGrid').onclick = (e) => {
+      const bar = e.target.closest('[data-vac-id]');
+      if (bar) {
+        const vac = vacations.find(v => v.id === bar.dataset.vacId);
+        if (vac) { openVacationModal(vac); return; }
+      }
+      const cell = e.target.closest('[data-date]');
+      if (cell) openDayModal(cell.dataset.date);
+    };
+
+  } catch(ex) {
+    console.error('Ошибка renderCalendar:', ex);
+    $('#content').innerHTML = `<div class="empty">${esc(ex.message)}</div>`;
+  }
+}
+
+function computeNorm(days){
+  let work = 0, off = 0, holiday = 0, short = 0;
+  for (const d of Object.values(days)) {
+    if (d.type === 'work' || d.type === 'short') work++;
+    if (d.type === 'short') short++;
+    if (d.type === 'holiday') holiday++;
+    if (d.type === 'dayoff') off++;
+  }
+  return { work, off, holiday, short };
+}
+
+const VAC_COLORS = [
+  '#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed',
+  '#0891b2', '#be185d', '#4d7c0f', '#b45309', '#6d28d9',
+  '#0f766e', '#a21caf', '#b91c1c', '#15803d', '#c2410c',
+  '#1d4ed8', '#9333ea', '#047857', '#9d174d', '#a16207',
+];
+
+function colorForEmployee(employeeId) {
+  const uniqueIds = [...new Set(vacations.map(v => v.employee_id))];
+  const idx = uniqueIds.indexOf(employeeId);
+  const c = VAC_COLORS[(idx >= 0 ? idx : 0) % VAC_COLORS.length];
+  return { border: c, fill: c + '15' }; // 15 = ~8% прозрачности
+}
+
+const BASE_ROW_HEIGHT = 50;  // минимальная высота строки
+const LANE_HEIGHT = 18;      // высота одной дорожки (полосы отпуска)
+
+function renderMonth(year, monthIdx){
+  const first = new Date(Date.UTC(year, monthIdx, 1));
+  const last  = new Date(Date.UTC(year, monthIdx + 1, 0));
+  const monthName = first.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+  const startDow = (first.getUTCDay() + 6) % 7;
+  const daysInMonth = last.getUTCDate();
+  const colW = 100 / 7;
+  const totalCells = startDow + daysInMonth;
+  const totalRows = Math.ceil(totalCells / 7);
+
+  // 1. Сегменты отпусков по неделям
+  const segments = Array.from({ length: totalRows }, () => []);
+  const monthFirst = new Date(Date.UTC(year, monthIdx, 1));
+  const monthLast  = new Date(Date.UTC(year, monthIdx + 1, 0));
+
+  for (const v of vacations) {
+    const vFrom = new Date(v.date_from);
+    const vTo   = new Date(v.date_to);
+    const segFrom = vFrom > monthFirst ? vFrom : monthFirst;
+    const segTo   = vTo   < monthLast  ? vTo   : monthLast;
+    if (segFrom > segTo) continue;
+
+    const segFromDay = segFrom.getUTCDate();
+    const segToDay   = segTo.getUTCDate();
+    const fromDow = (segFrom.getUTCDay() + 6) % 7;
+    const toDow   = (segTo.getUTCDay()   + 6) % 7;
+    const fromRow = Math.floor((startDow + segFromDay - 1) / 7);
+    const toRow   = Math.floor((startDow + segToDay   - 1) / 7);
+
+    for (let w = fromRow; w <= toRow; w++) {
+      segments[w].push({
+        v,
+        fromDow: (w === fromRow ? fromDow : 0),
+        toDow:   (w === toRow   ? toDow   : 6),
+      });
+    }
+  }
+
+  // 2. Раскладка по интервалам
+  const lanesPerWeek = [];
+  const bars = [];
+
+  for (let w = 0; w < totalRows; w++) {
+    const segs = segments[w];
+    if (!segs.length) { lanesPerWeek[w] = 0; continue; }
+
+    const points = new Set([0, 7]);
+    for (const s of segs) { points.add(s.fromDow); points.add(s.toDow + 1); }
+    const pts = [...points].sort((a, b) => a - b);
+
+    let maxLane = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const active = segs.filter(s => s.fromDow <= a && s.toDow >= b - 1);
+      active.forEach((s, idx) => {
+        if (!s._bars) s._bars = [];
+        s._bars.push({ fromDow: a, toDow: b - 1, lane: idx });
+        if (idx > maxLane) maxLane = idx;
+      });
+    }
+
+    lanesPerWeek[w] = maxLane + 1;
+
+    for (const s of segs) {
+      for (const b of s._bars) {
+        bars.push({ v: s.v, week: w, lane: b.lane, fromDow: b.fromDow, toDow: b.toDow });
+      }
+      delete s._bars;
+    }
+  }
+
+  const rowHeights = lanesPerWeek.map(n => n === 0 ? BASE_ROW_HEIGHT : Math.max(BASE_ROW_HEIGHT, n * LANE_HEIGHT + 8));
+  const rowTops = [];
+  let acc = 0;
+  for (let w = 0; w < totalRows; w++) { rowTops[w] = acc; acc += rowHeights[w]; }
+
+  // 3. Сетка дней
+  let cells = '';
+  for (let i = 0; i < startDow; i++) {
+  cells += `<div style="height:${rowHeights[0]}px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"></div>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(monthIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const info = calDays[iso] || { type: 'work' };
+    const isWeekend = info.type === 'dayoff';
+    const isHoliday = info.type === 'holiday';
+    const isShort   = info.type === 'short';
+    let bg = '';
+    if (isHoliday) bg = '#fee2e2';
+    else if (isWeekend) bg = '#f1f5f9';
+    else if (isShort) bg = '#fef3c7';
+    const rowIdx = Math.floor((startDow + d - 1) / 7);
+    cells += `<div data-date="${iso}" style="height:${rowHeights[rowIdx]}px;background:${bg};cursor:pointer;position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:center;padding-top:2px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+      <span style="font-weight:${isHoliday||isShort?'600':'400'};color:${isHoliday?'#991b1b':isWeekend?'#64748b':'#0f172a'};font-size:11px">${d}</span>
+    </div>`;
+  }
+  const tail = (7 - (totalCells % 7)) % 7;
+  for (let i = 0; i < tail; i++) {
+    cells += `<div style="height:${rowHeights[totalRows-1]}px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"></div>`;
+  }
+
+  // 4. Полосы
+  const vacBars = [];
+  for (const b of bars) {
+    const v = b.v;
+    const color = colorForEmployee(v.employee_id);
+    const leftPct  = b.fromDow * colW;
+    const widthPct = (b.toDow - b.fromDow + 1) * colW;
+    const topPx    = rowTops[b.week] + b.lane * LANE_HEIGHT + 20; // +20 от верха ячейки, чтобы пропустить цифру
+    const heightPx = LANE_HEIGHT - 4;
+    const label = b.fromDow === 0 || b.lane === 0
+      ? v.employee_name.split(' ')[0] + ' ' + (v.employee_name.split(' ')[1]?.[0] || '') + '.'
+      : '';
+
+    vacBars.push(`<div
+      data-vac-id="${v.id}"
+      title="${esc(v.employee_name)} · ${esc(v.kind)} · ${fmtDate(v.date_from)} — ${fmtDate(v.date_to)}"
+      style="
+        position:absolute;
+        left:${leftPct}%;
+        width:${widthPct}%;
+        top:${topPx}px;
+        height:${heightPx}px;
+        background:rgba(255, 255, 255, 0.9); /* Полупрозрачный белый, чтобы не перекрывать сетку */
+        border:2px solid ${color.border};
+        border-radius:4px;
+        pointer-events:auto;
+        z-index:2;
+        display:flex;align-items:center;padding:0 4px;
+        font-size:10px;color:${color.border};font-weight:600;
+        overflow:hidden;white-space:nowrap;box-sizing:border-box;
+      "
+    >${esc(label)}</div>`);
+  }
+
+  // 5. Разметка
+  return `<div class="card" style="padding:8px">
+    <div style="font-weight:600;margin-bottom:8px;text-transform:capitalize;font-size:13px">${esc(monthName)}</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:10px;margin-bottom:2px">
+      <div style="text-align:center;color:var(--muted)">Пн</div>
+      <div style="text-align:center;color:var(--muted)">Вт</div>
+      <div style="text-align:center;color:var(--muted)">Ср</div>
+      <div style="text-align:center;color:var(--muted)">Чт</div>
+      <div style="text-align:center;color:var(--muted)">Пт</div>
+      <div style="text-align:center;color:var(--muted)">Сб</div>
+      <div style="text-align:center;color:var(--muted)">Вс</div>
+    </div>
+    <div style="position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:0; border: 1px solid #e2e8f0; border-right:0; border-bottom:0;">
+      ${cells}
+      ${vacBars.join('')}
+    </div>
+  </div>`;
+}
+
+function openDayModal(iso){
+  const info = calDays[iso] || { type: 'work', name: '' };
+  const dayVacs = vacations.filter(v => v.date_from <= iso && v.date_to >= iso);
+  const typeLabels = { work:'Рабочий', holiday:'Праздник', short:'Сокращённый', dayoff:'Выходной' };
+
+  $('#modalTitle').textContent = `День: ${fmtDate(iso)}`;
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label class="full">Тип дня
+        <select id="d_type" ${!can('admin')?'disabled':''}>
+          ${Object.entries(typeLabels).map(([k,v]) =>
+            `<option value="${k}" ${info.type===k?'selected':''}>${v}</option>`).join('')}
+        </select>
+      </label>
+      <label class="full">Название
+        <input id="d_name" value="${esc(info.name||'')}" ${!can('admin')?'disabled':''}>
+      </label>
+    </div>
+    <h4 style="margin:16px 0 8px">Отпуска в этот день (${dayVacs.length})</h4>
+    <div>
+      ${dayVacs.length ? dayVacs.map(v => `
+        <div style="padding:8px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px">
+          <div style="flex:1">
+            <b>${esc(v.employee_name)}</b>
+            <span style="color:var(--muted);font-size:12px">${esc(v.kind)} · ${fmtDate(v.date_from)} — ${fmtDate(v.date_to)}</span>
+          </div>
+          ${can('admin,operator') ? `
+            <button class="btn sm" data-act="editVac" data-id="${v.id}" title="Редактировать">✏️</button>
+            <button class="btn sm danger" data-act="delVac" data-id="${v.id}" title="Удалить">🗑</button>
+          ` : ''}
+        </div>`).join('') : '<div class="empty">Нет</div>'}
+    </div>
+  `;
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="d_cancel">Закрыть</button>
+    ${can('admin') ? `<button class="btn primary" id="d_save">Сохранить день</button>` : ''}
+  `;
+  $('#d_cancel').onclick = closeModal;
+  if ($('#d_save')) $('#d_save').onclick = async () => {
+    try {
+      await API.req('PATCH', `/api/calendar/day/${iso}`, {
+        type: $('#d_type').value,
+        name: $('#d_name').value.trim(),
+      });
+      closeModal();
+      toast('Сохранено','ok');
+      renderCalendar();
+    } catch(ex) { toast(ex.message,'error'); }
+  };
+  $('#backdrop').classList.add('open');
+}
+  $('#modalBody').onclick = async (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const vac = vacations.find(v => v.id === id);
+    if (!vac) return;
+
+    if (btn.dataset.act === 'editVac') {
+      closeModal();
+      // Небольшая задержка, чтобы модалка дня закрылась до открытия модалки отпуска
+      setTimeout(() => openVacationModal(vac), 50);
+    }
+    if (btn.dataset.act === 'delVac') {
+      if (!confirm(`Удалить отпуск ${vac.employee_name} (${fmtDate(vac.date_from)} — ${fmtDate(vac.date_to)})?`)) return;
+      try {
+        await API.delVacation(id);
+        closeModal();
+        toast('Удалено','ok');
+        renderCalendar();
+      } catch(ex) { toast(ex.message,'error'); }
+    }
+  };
+
+async function openVacationModal(vac){
+  let emps = [];
+  try { emps = await API.employees(); } catch(e) {}
+  const isEdit = !!vac;
+
+  // Если редактируем — посчитаем, сколько дней в текущем отпуске
+  let initialDays = '';
+  if (vac?.date_from && vac?.date_to) {
+    const d1 = new Date(vac.date_from), d2 = new Date(vac.date_to);
+    initialDays = Math.round((d2 - d1) / 86400000) + 1;
+  }
+
+  $('#modalTitle').textContent = isEdit ? 'Редактировать отпуск' : 'Новый отпуск';
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label class="full">Сотрудник
+        <input id="v_emp_search" list="v_emp_list" value="${esc(vac?.employee_name||'')}" autocomplete="off" placeholder="Начните вводить ФИО...">
+        <datalist id="v_emp_list">
+          ${emps.map(e => `<option value="${esc(e.full_name)}" data-id="${e.id}"></option>`).join('')}
+        </datalist>
+      </label>
+      <label>Дата начала
+        <input type="date" id="v_from" value="${vac?.date_from||''}">
+      </label>
+      <label>Кол-во календарных дней
+        <input type="number" id="v_days" min="1" max="365" value="${initialDays}" placeholder="например, 36">
+      </label>
+      <label>Дата окончания (расчёт)
+        <input type="date" id="v_to" value="${vac?.date_to||''}" readonly style="background:#f1f5f9;cursor:not-allowed">
+      </label>
+      <label>Вид
+        <select id="v_kind">
+          <option value="annual" ${vac?.kind==='annual'?'selected':''}>Ежегодный оплачиваемый</option>
+          <option value="unpaid" ${vac?.kind==='unpaid'?'selected':''}>Без сохранения зарплаты</option>
+          <option value="sick" ${vac?.kind==='sick'?'selected':''}>Больничный</option>
+          <option value="study" ${vac?.kind==='study'?'selected':''}>Учебный</option>
+          <option value="other" ${vac?.kind==='other'?'selected':''}>Другое</option>
+        </select>
+      </label>
+      <label class="full">Примечание<textarea id="v_note">${esc(vac?.note||'')}</textarea></label>
+    </div>
+  `;
+
+  // Пересчёт date_to при изменении date_from или days
+  const recalcTo = () => {
+    const from = $('#v_from').value;
+    const days = parseInt($('#v_days').value, 10);
+    if (!from || !days || days < 1) { $('#v_to').value = ''; return; }
+    const d = new Date(from);
+    d.setDate(d.getDate() + days - 1); // «включительно»
+    $('#v_to').value = d.toISOString().slice(0, 10);
+  };
+  $('#v_from').oninput = recalcTo;
+  $('#v_days').oninput = recalcTo;
+
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="v_cancel">Отмена</button>
+    ${isEdit ? `<button class="btn danger" id="v_del">Удалить</button>` : ''}
+    <button class="btn primary" id="v_save">Сохранить</button>
+  `;
+  $('#v_cancel').onclick = closeModal;
+  if ($('#v_del')) $('#v_del').onclick = async () => {
+    if (!confirm('Удалить отпуск?')) return;
+    try { await API.delVacation(vac.id); closeModal(); toast('Удалено','ok'); renderCalendar(); }
+    catch(ex) { toast(ex.message,'error'); }
+  };
+  $('#v_save').onclick = async () => {
+    const fullName = $('#v_emp_search').value.trim();
+    const emp = emps.find(e => e.full_name === fullName);
+    if (!emp) { toast('Выберите сотрудника из списка','error'); return; }
+    const from = $('#v_from').value;
+    const days = parseInt($('#v_days').value, 10);
+    if (!from || !days || days < 1) { toast('Укажите дату начала и количество дней','error'); return; }
+    recalcTo();
+    const rec = {
+      employee_id: emp.id,
+      date_from: from,
+      date_to: $('#v_to').value,
+      kind: $('#v_kind').value,
+      note: $('#v_note').value.trim(),
+    };
+    try {
+      if (isEdit) await API.updVacation(vac.id, rec);
+      else await API.addVacation(rec);
+      closeModal(); toast('Сохранено','ok'); renderCalendar();
+    } catch(ex) { toast(ex.message,'error'); }
+  };
+  $('#backdrop').classList.add('open');
 }
 
 function showDashboardDetails(title, list) {
