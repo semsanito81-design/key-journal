@@ -1287,6 +1287,68 @@ function computeMonthNorm(year, monthIdx){
   };
 }
 
+function generateNormTable(year) {
+  const months = Array.from({length: 12}, (_, i) => computeMonthNorm(year, i));
+  
+  // Функция для суммирования нескольких месяцев
+  const sumMonths = (mArray) => {
+    return mArray.reduce((acc, m) => ({
+      calendarDays: acc.calendarDays + m.calendarDays,
+      workDays: acc.workDays + m.workDays,
+      weekendDays: acc.weekendDays + m.weekendDays,
+      hours40: acc.hours40 + m.hours40,
+      hours36: acc.hours36 + m.hours36,
+      hours24: acc.hours24 + m.hours24,
+    }), { calendarDays: 0, workDays: 0, weekendDays: 0, hours40: 0, hours36: 0, hours24: 0 });
+  };
+
+  const renderRow = (name, data, isTotal = false) => {
+    const style = isTotal ? 'font-weight: bold; background: #f8fafc;' : '';
+    const fmt = (n) => Number.isInteger(n) ? n : n.toFixed(1).replace('.', ',');
+    return `<tr style="${style}">
+      <td style="border: 1px solid var(--line); padding: 6px; text-align: left;">${name}</td>
+      <td style="border: 1px solid var(--line); padding: 6px;">${data.calendarDays}</td>
+      <td style="border: 1px solid var(--line); padding: 6px;">${data.workDays}</td>
+      <td style="border: 1px solid var(--line); padding: 6px;">${data.weekendDays}</td>
+      <td style="border: 1px solid var(--line); padding: 6px;">${fmt(data.hours40)}</td>
+      <td style="border: 1px solid var(--line); padding: 6px;">${fmt(data.hours36)}</td>
+      <td style="border: 1px solid var(--line); padding: 6px;">${fmt(data.hours24)}</td>
+    </tr>`;
+  };
+
+  let html = '';
+
+  // Январь - Март + 1 квартал
+  html += renderRow('Январь', months[0]);
+  html += renderRow('Февраль', months[1]);
+  html += renderRow('Март', months[2]);
+  html += renderRow('1 квартал', sumMonths([months[0], months[1], months[2]]), true);
+
+  // Апрель - Июнь + 2 квартал + 1 полугодие
+  html += renderRow('Апрель', months[3]);
+  html += renderRow('Май', months[4]);
+  html += renderRow('Июнь', months[5]);
+  html += renderRow('2 квартал', sumMonths([months[3], months[4], months[5]]), true);
+  html += renderRow('1 полугодие', sumMonths(months.slice(0, 6)), true);
+
+  // Июль - Сентябрь + 3 квартал + 9 месяцев
+  html += renderRow('Июль', months[6]);
+  html += renderRow('Август', months[7]);
+  html += renderRow('Сентябрь', months[8]);
+  html += renderRow('3 квартал', sumMonths([months[6], months[7], months[8]]), true);
+  html += renderRow('9 месяцев', sumMonths(months.slice(0, 9)), true);
+
+  // Октябрь - Декабрь + 4 квартал + 2 полугодие + Год
+  html += renderRow('Октябрь', months[9]);
+  html += renderRow('Ноябрь', months[10]);
+  html += renderRow('Декабрь', months[11]);
+  html += renderRow('4 квартал', sumMonths([months[9], months[10], months[11]]), true);
+  html += renderRow('2 полугодие', sumMonths(months.slice(6)), true);
+  html += renderRow(`${year} год`, sumMonths(months), true);
+
+  return html;
+}
+
 function renderMonthForPrint(year, monthIdx){
   const first = new Date(Date.UTC(year, monthIdx, 1));
   const last  = new Date(Date.UTC(year, monthIdx + 1, 0));
@@ -1717,6 +1779,7 @@ async function renderCalendar(){
         </div>
         <span class="spacer"></span>
         ${can('admin,operator') ? `<button class="btn primary" id="cal_addVac">➕ Отпуск</button>` : ''}
+        <button class="btn" id="cal_norms">📊 Нормы</button>
         <button class="btn" id="cal_export_vac" style="background:#16a34a;color:#fff;border:none">📊 Отпуска (Excel)</button>
         <button class="btn" id="cal_export_sched" style="background:#16a34a;color:#fff;border:none">📊 График (Excel)</button>
         <button class="btn" id="cal_print">🖨 Печать</button>
@@ -1732,10 +1795,12 @@ async function renderCalendar(){
 
       <div id="monthsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
         ${monthsHtml}
-      </div>
+      </div>      
     `;
 
     // === ОБРАБОТЧИКИ (ВАЖНО: они навешиваются ПОСЛЕ innerHTML) ===
+    if ($('#cal_norms')) $('#cal_norms').onclick = () => openNormsModal(calYear);
+    
     $('#cal_year').onchange = (e) => {
       calYear = +e.target.value;
       renderCalendar();
@@ -1977,6 +2042,45 @@ function renderMonth(year, monthIdx){
       ${vacBars.join('')}
     </div>
   </div>`;
+}
+
+function openNormsModal(year) {
+  $('#modalTitle').textContent = `Нормы рабочего времени на ${year} год`;
+  
+  // Вызываем функцию генерации, которую мы написали ранее
+  const tableHtml = generateNormTable(year);
+
+  $('#modalBody').innerHTML = `
+    <div class="table-wrap" style="max-height: 70vh; overflow-y: auto;">
+      <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 13px;">
+        <thead>
+          <tr style="background: #f8fafc;">
+            <th rowspan="2" style="border: 1px solid var(--line); padding: 8px; text-align: left; position: sticky; top: 0; z-index: 10; background: #f8fafc;">Период</th>
+            <th colspan="3" style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 0; z-index: 10; background: #f8fafc;">Количество дней</th>
+            <th colspan="3" style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 0; z-index: 10; background: #f8fafc;">Рабочих часов при неделе</th>
+          </tr>
+          <tr style="background: #f8fafc;">
+            <th style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 37px; z-index: 10; background: #f8fafc;">Календарных</th>
+            <th style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 37px; z-index: 10; background: #f8fafc;">Рабочих</th>
+            <th style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 37px; z-index: 10; background: #f8fafc;">Выходных</th>
+            <th style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 37px; z-index: 10; background: #f8fafc;">40 часов</th>
+            <th style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 37px; z-index: 10; background: #f8fafc;">36 часов</th>
+            <th style="border: 1px solid var(--line); padding: 8px; position: sticky; top: 37px; z-index: 10; background: #f8fafc;">24 часа</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $('#modalFooter').innerHTML = `
+    <button class="btn" onclick="closeModal()">Закрыть</button>
+    <button class="btn primary" onclick="window.print()">🖨 Печать</button>
+  `;
+  
+  $('#backdrop').classList.add('open');
 }
 
 function openDayModal(iso){
