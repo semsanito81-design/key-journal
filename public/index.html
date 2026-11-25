@@ -326,6 +326,7 @@ th {
       <a href="#users" data-view="users" data-role="admin">👥 Пользователи</a>
       <a href="#audit" data-view="audit" data-role="admin,auditor">📜 Аудит-лог</a>
       <div class="nav-sep"></div>
+      <a href="#admin" data-view="admin" data-role="admin">⚙ Администрирование</a>
       <a href="#profile" data-view="profile">👤 Профиль</a>
     </nav>
     <div class="user-box">
@@ -428,6 +429,11 @@ const API = {
   addVacation:(v)=>API.req('POST','/api/vacations',v),
   updVacation:(id,v)=>API.req('PATCH','/api/vacations/'+id,v),
   delVacation:(id)=>API.req('DELETE','/api/vacations/'+id),
+
+  statuses:(all=false)=>API.req('GET','/api/asset-statuses' + (all ? '?all=1' : '')),
+  addStatus:(s)=>API.req('POST','/api/asset-statuses',s),
+  updStatus:(code,s)=>API.req('PATCH','/api/asset-statuses/'+code,s),
+  delStatus:(code)=>API.req('DELETE','/api/asset-statuses/'+code),
 };
 
 /* ============================================================
@@ -550,13 +556,13 @@ async function route(){
   const h = location.hash.replace('#','') || 'journal';
   const allowed = {
     dashboard:()=>true, journal:()=>true, assets:()=>true, employees:()=>true, calendar:()=>true, profile:()=>true,
-    types:()=>can('admin'), users:()=>can('admin'), audit:()=>can('admin,auditor')
+    types:()=>can('admin'), users:()=>can('admin'), audit:()=>can('admin,auditor'), admin:()=>can('admin'), 'admin-statuses':()=>can('admin')
   };
   if(!allowed[h] || !allowed[h]()){ location.hash='journal'; return; }
   currentView = h;
   $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===h));
   const titles = {dashboard:'Дашборд',journal:'Журнал',assets:'Оборудование',employees:'Сотрудники',types:'Типы сертификатов',
-                  users:'Пользователи',audit:'Аудит-лог',profile:'Профиль',calendar:'Производственный календарь'};
+                  users:'Пользователи',audit:'Аудит-лог', profile:'Профиль',calendar:'Производственный календарь', admin:'Администрирование', 'admin-statuses':'Статусы оборудования'};
   $('#viewTitle').textContent = titles[h]||'';
   await renderTopbarActions();
   try{
@@ -569,6 +575,9 @@ async function route(){
     if(h==='users')     await renderUsers();
     if(h==='audit')     await renderAudit();
     if(h==='profile')   await renderProfile();
+    if(h==='admin')     await renderAdmin();           // <-- НОВОЕ
+    if(h==='admin-statuses') await renderAdminStatuses(); // <-- НОВОЕ
+    
   }catch(ex){
     if(ex.message!=='Не авторизован') toast(ex.message,'error');
   }
@@ -870,9 +879,11 @@ async function openCarrierModal(row){
       
       <label>Должность<input id="m_position" value="${esc(row?.position)}"></label>
       <label>Подразделение<input id="m_department" value="${esc(row?.department)}"></label>
-      <label>Статус носителя
+      <label>Статус
         <select id="m_status">
-          ${['active','returned','reserved'].map(s=>`<option value="${s}" ${row?.status===s?'selected':''}>${{active:'Активен',returned:'Возвращён',reserved:'Резерв'}[s]}</option>`).join('')}
+          ${statuses.map(s => `
+            <option value="${s.code}" ${item?.status === s.code ? 'selected' : ''}>${esc(s.name)}</option>
+          `).join('')}
         </select>
       </label>
       
@@ -2312,6 +2323,143 @@ async function renderTypes(){
   };
 }
 
+// === ГЛАВНАЯ СТРАНИЦА АДМИНКИ ===
+async function renderAdmin(){
+  $('#content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+      <div class="card" style="cursor:pointer" onclick="location.hash='#admin-statuses'">
+        <div class="label">Справочники</div>
+        <div style="font-size:18px;font-weight:600;margin-top:4px">🏷 Статусы оборудования</div>
+        <div class="sub">В работе, в ремонте, на складе, в мастерской…</div>
+      </div>
+      <div class="card" style="cursor:pointer" onclick="location.hash='#types'">
+        <div class="label">Справочники</div>
+        <div style="font-size:18px;font-weight:600;margin-top:4px">🏷 Типы сертификатов</div>
+        <div class="sub">2FA, ЦОД, Оператор, Админ…</div>
+      </div>
+      <div class="card" style="cursor:pointer" onclick="location.hash='#users'">
+        <div class="label">Доступ</div>
+        <div style="font-size:18px;font-weight:600;margin-top:4px">👥 Пользователи</div>
+        <div class="sub">Учётные записи, роли, пароли</div>
+      </div>
+      <div class="card" style="cursor:pointer" onclick="location.hash='#audit'">
+        <div class="label">Безопасность</div>
+        <div style="font-size:18px;font-weight:600;margin-top:4px">📜 Аудит-лог</div>
+        <div class="sub">История действий</div>
+      </div>
+    </div>
+    <p style="color:var(--muted);margin-top:20px;font-size:12px">
+      Раздел в разработке. Постепенно сюда переедут все справочники и настройки.
+    </p>
+  `;
+}
+
+// === СТРАНИЦА СТАТУСОВ ===
+async function renderAdminStatuses(){
+  let list;
+  try { list = await API.statuses(true); } catch(ex){ toast(ex.message,'error'); return; }
+  
+  $('#content').innerHTML = `
+    <div class="toolbar">
+      <button class="btn" onclick="location.hash='#admin'">← Назад</button>
+      <span class="spacer"></span>
+      <button class="btn primary" id="stAdd">➕ Добавить статус</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Код</th><th>Название</th><th>Цвет</th><th>Порядок</th><th>Активен</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(s => `
+            <tr>
+              <td><code>${esc(s.code)}</code></td>
+              <td>
+                <span class="badge" style="background:${s.color}20;color:${s.color};border:1px solid ${s.color}40">
+                  ${esc(s.name)}
+                </span>
+              </td>
+              <td><span style="display:inline-block;width:20px;height:20px;background:${s.color};border-radius:4px;vertical-align:middle"></span> <code>${esc(s.color)}</code></td>
+              <td class="num">${s.sort_order}</td>
+              <td>${s.is_active ? '✅' : '⛔'}</td>
+              <td>
+                <button class="btn sm" data-act="edit" data-id="${s.code}">✏️</button>
+                <button class="btn sm danger" data-act="del" data-id="${s.code}">🗑</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $('#stAdd').onclick = () => openStatusModal(null);
+
+  $('#content').onclick = async (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const code = btn.dataset.id;
+    const st = list.find(x => x.code === code);
+    if (!st) return;
+    if (btn.dataset.act === 'edit') openStatusModal(st);
+    if (btn.dataset.act === 'del') {
+      if (!confirm(`Удалить статус «${st.name}»?`)) return;
+      try { await API.delStatus(code); await renderAdminStatuses(); toast('Удалено','ok'); }
+      catch(ex){ toast(ex.message,'error'); }
+    }
+  };
+}
+
+let editStatusCode = null;
+function openStatusModal(st){
+  editStatusCode = st ? st.code : null;
+  $('#modalTitle').textContent = st ? 'Редактировать статус' : 'Новый статус';
+  $('#modalBody').innerHTML = `
+    <div class="form">
+      <label>Код (латиница, напр. <code>workshop</code>)
+        <input id="s_code" value="${esc(st?.code || '')}" ${st ? 'disabled' : ''} placeholder="например, workshop">
+      </label>
+      <label>Название
+        <input id="s_name" value="${esc(st?.name || '')}" placeholder="например, В мастерской">
+      </label>
+      <label>Цвет
+        <input id="s_color" type="color" value="${st?.color || '#64748b'}" style="height:40px">
+      </label>
+      <label>Порядок
+        <input id="s_sort" type="number" value="${st?.sort_order ?? 10}">
+      </label>
+      ${st ? `
+        <label class="check full">
+          <input type="checkbox" id="s_active" ${st.is_active ? 'checked' : ''}> Активен
+        </label>
+      ` : ''}
+    </div>
+  `;
+  $('#modalFooter').innerHTML = `
+    <button class="btn" id="s_cancel">Отмена</button>
+    <button class="btn primary" id="s_save">Сохранить</button>
+  `;
+  $('#s_cancel').onclick = closeModal;
+  $('#s_save').onclick = async () => {
+    const rec = {
+      code: $('#s_code').value.trim(),
+      name: $('#s_name').value.trim(),
+      color: $('#s_color').value,
+      sort_order: +$('#s_sort').value,
+      is_active: $('#s_active')?.checked,
+    };
+    if (!rec.code || !rec.name) { toast('Укажите код и название','error'); return; }
+    try {
+      if (editStatusCode) await API.updStatus(editStatusCode, rec);
+      else await API.addStatus(rec);
+      closeModal(); await renderAdminStatuses(); toast('Сохранено','ok');
+    } catch(ex){ toast(ex.message,'error'); }
+  };
+  $('#backdrop').classList.add('open');
+}
+
 let editTypeCode = null;
 function openTypeModal(t){
   editTypeCode = t ? t.code : null;
@@ -2343,6 +2491,7 @@ let openArms = new Set();
 let assetSortKey = 'model';
 let assetSortDesc = false;
 let globalAssetTypes = [];
+let globalStatuses = [];
 
 // ГЛОБАЛЬНАЯ функция для загрузки и отрисовки таблицы
 window.loadAssetsTable = async () => {
@@ -2410,10 +2559,10 @@ window.loadAssetsTable = async () => {
 
           if (isOpen) {
             html += items.map(a => {
-              let stBadge = '<span class="badge active">В работе</span>';
-              if (a.status === 'repair') stBadge = '<span class="badge reserved">В ремонте</span>';
-              if (a.status === 'storage') stBadge = '<span class="badge returned">На складе</span>';
-              if (a.status === 'written_off') stBadge = '<span class="badge expired">Списано</span>';
+              const st = globalStatuses.find(s => s.code === a.status);
+              let stBadge = st
+                ? `<span class="badge" style="background:${st.color}20;color:${st.color};border:1px solid ${st.color}40">${esc(st.name)}</span>`
+                : `<span class="badge">${esc(a.status)}</span>`;
               
               return `<tr style="background:#fff;">
                 <td><input type="checkbox" class="as-checkbox" data-id="${a.id}"></td>
@@ -2438,12 +2587,13 @@ window.loadAssetsTable = async () => {
       } else {
         // ПЛОСКИЙ ВИД
         tb.innerHTML = assetsList.map(a => {
-          let stBadge = '<span class="badge active">В работе</span>';
+          const st = globalStatuses.find(s => s.code === a.status);
+          let stBadge = st
+            ? `<span class="badge" style="background:${st.color}20;color:${st.color};border:1px solid ${st.color}40">${esc(st.name)}</span>`
+            : `<span class="badge">${esc(a.status)}</span>`;
+          
           let rowStyle = '';
-          if (a.status === 'repair') stBadge = '<span class="badge reserved">В ремонте</span>';
-          if (a.status === 'storage') stBadge = '<span class="badge returned">На складе</span>';
           if (a.status === 'written_off') {
-            stBadge = '<span class="badge expired">Списано</span>';
             rowStyle = 'text-decoration: line-through; color: #999;';
           }
 
@@ -2477,8 +2627,12 @@ window.toggleArm = function(armName) {
 };
 
 async function renderAssets() {
-  let types = [];
-  try { types = await API.assetTypes(); globalAssetTypes = types; } catch(e) {}
+  let types = [], statuses = [];
+  try { 
+    [types, statuses] = await Promise.all([API.assetTypes(), API.statuses()]);
+    globalAssetTypes = types;
+    globalStatuses = statuses; // <-- обязательно
+  } catch(e) { console.error('Ошибка загрузки типов/статусов:', e); }
   
   $('#content').innerHTML = `
     <div class="toolbar">
@@ -2489,10 +2643,7 @@ async function renderAssets() {
       </select>
       <select id="as_status">
         <option value="">Все статусы</option>
-        <option value="active">🟢 В работе</option>
-        <option value="repair">🟡 В ремонте</option>
-        <option value="storage">🔵 На складе</option>
-        <option value="written_off">🔴 Списано</option>
+        ${statuses.map(s => `<option value="${s.code}">${esc(s.name)}</option>`).join('')}
       </select>
       <label class="chk">
         <input type="checkbox" id="as_group" ${assetsViewMode === 'grouped' ? 'checked' : ''}> 
@@ -2577,13 +2728,17 @@ async function renderAssets() {
   window.loadAssetsTable();
 }
 
-async function openAssetModal(item, types) {
+async function openAssetModal(item, types) {  
   const isEdit = !!item;
   $('#modalTitle').textContent = isEdit ? 'Редактировать оборудование' : 'Новое оборудование';
   
   // 1. Загружаем сотрудников
   let employees = [];
   try { employees = await API.employees(); } catch(e) {}
+
+  // 1.5. Загружаем статусы
+  let statuses = [];
+  try { statuses = await API.statuses(); } catch(e) {}
 
   // 2. Загружаем историю, если это редактирование
   let historyHtml = '';
@@ -2632,10 +2787,9 @@ async function openAssetModal(item, types) {
       <label>Место (кабинет)<input id="m_loc" value="${esc(item?.location)}"></label>
       <label>Статус
         <select id="m_status">
-          <option value="active" ${item?.status === 'active' ? 'selected' : ''}>В работе</option>
-          <option value="repair" ${item?.status === 'repair' ? 'selected' : ''}>В ремонте</option>
-          <option value="storage" ${item?.status === 'storage' ? 'selected' : ''}>На складе</option>
-          <option value="written_off" ${item?.status === 'written_off' ? 'selected' : ''}>Списано</option>
+          ${(await API.statuses()).map(s => `
+            <option value="${s.code}" ${item?.status === s.code ? 'selected' : ''}>${esc(s.name)}</option>
+          `).join('')}
         </select>
       </label>
       <label class="full">Примечание<textarea id="m_note">${esc(item?.note)}</textarea></label>

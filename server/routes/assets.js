@@ -4,6 +4,14 @@ import { q } from '../db.js';
 export default async function(app){
   app.addHook('preHandler', authHook);
 
+  // Справочник статусов (для фильтров и модалки, доступен всем)
+  app.get('/statuses', async () => {
+    const { rows } = await q(
+      `SELECT code, name, color FROM asset_statuses WHERE is_active = true ORDER BY sort_order, name`
+    );
+    return rows;
+  });
+
   // Получить справочник типов
   app.get('/types', async () => {
     const { rows } = await q('SELECT * FROM asset_types ORDER BY name');
