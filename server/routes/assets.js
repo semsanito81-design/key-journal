@@ -1,6 +1,9 @@
 import { authHook, requireRole } from '../auth.js';
 import { q } from '../db.js';
 
+// === Хелпер: пустую строку → null ===
+const toNull = (v) => (v === '' || v === undefined ? null : v);
+
 export default async function(app){
   app.addHook('preHandler', authHook);
 
@@ -64,7 +67,7 @@ export default async function(app){
       ({ rows } = await q(`
         INSERT INTO assets (inv_number, serial_number, type_code, model, status, arm_name, employee_id, location, note)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [b.inv_number||null, b.serial_number||null, b.type_code, b.model, b.status||'active', b.arm_name||null, b.employee_id||null, b.location||null, b.note||null]));
+        [toNull(b.inv_number), toNull(b.serial_number), b.type_code, b.model, b.status||'active', toNull(b.arm_name), b.employee_id||null, toNull(b.location), toNull(b.note)]));
     } catch (e) {
       if (e.code === '23505') {
         return reply.code(409).send({
@@ -111,7 +114,7 @@ export default async function(app){
           note = COALESCE($9, note),
           updated_at = now()
         WHERE id = $10 RETURNING *`,
-        [b.inv_number, b.serial_number, b.type_code, b.model, b.status, b.arm_name, b.employee_id || null, b.location, b.note, req.params.id]));
+        [toNull(b.inv_number), toNull(b.serial_number), b.type_code, b.model, b.status, toNull(b.arm_name), b.employee_id || null, toNull(b.location), toNull(b.note), req.params.id]));
     } catch (e) {
       if (e.code === '23505') {
         return reply.code(409).send({
